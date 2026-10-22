@@ -12,13 +12,22 @@
       </p>
     </div>
     
-    <!-- Quick Sync Form (Pure HTML POST) -->
-    <form action="/action/sync" method="post" style="display: flex; gap: 0.5rem; align-items: center;">
-      <input type="hidden" name="limit" value="20">
-      <button type="submit" class="btn btn-primary">
-        🔄 Sincronizar Feeds Ahora
-      </button>
-    </form>
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <!-- 24h Cron Trigger Form -->
+      <form action="/action/cron/trigger" method="post">
+        <button type="submit" class="btn btn-secondary" title="Dispara el proceso de las últimas 24 horas y envía artículos a RabbitMQ">
+          ⏱️ Ejecutar Cron 24h
+        </button>
+      </form>
+
+      <!-- Quick Sync Form (Pure HTML POST) -->
+      <form action="/action/sync" method="post">
+        <input type="hidden" name="limit" value="20">
+        <button type="submit" class="btn btn-primary">
+          🔄 Sincronizar Feeds Ahora
+        </button>
+      </form>
+    </div>
   </div>
 </div>
 

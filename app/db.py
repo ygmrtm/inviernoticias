@@ -41,6 +41,13 @@ def init_db():
                 FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
             );
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
         # Insert default feed for El Deforma if not exists
         deforma_url = "https://eldeforma.com/feed/"
         cursor.execute("SELECT id FROM feeds WHERE url = ?", (deforma_url,))
@@ -49,6 +56,9 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
+
+# Auto-initialize on import so tables are always guaranteed ready
+init_db()
 
 def get_feeds() -> List[Dict[str, Any]]:
     conn = get_connection()
@@ -191,5 +201,42 @@ def update_article_notion_page(article_id: int, notion_page_id: str) -> bool:
         )
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+# ==========================================
+# SETTINGS OPERATIONS
+# ==========================================
+
+def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = ?;", (key,))
+        row = cursor.fetchone()
+        return row["value"] if row else default
+    finally:
+        conn.close()
+
+def set_setting(key: str, value: str):
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO settings (key, value, updated_at) 
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP;
+        """, (key, value))
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_all_settings() -> Dict[str, str]:
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM settings;")
+        rows = cursor.fetchall()
+        return {row["key"]: row["value"] for row in rows}
     finally:
         conn.close()

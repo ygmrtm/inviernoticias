@@ -4,7 +4,7 @@
 set -e
 
 # Configuration (Edit these for your server)
-SERVER_IP="192.168.100.33"
+SERVER_IP="192.168.1.33"
 SERVER_USER="yg"
 DEPLOY_DIR="~/apps/inviernoticias"
 

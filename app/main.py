@@ -16,6 +16,10 @@ from . import db
 from . import rss
 from . import gemini
 from . import notion
+from . import rabbitmq
+from . import worker
+from . import cron
+from . import scheduler
 
 dotenv.load_dotenv()
 
@@ -24,10 +28,39 @@ logger = logging.getLogger("inviernoticias")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize SQLite database tables on startup
+    # 1. Initialize SQLite database
     db.init_db()
     logger.info("Base de datos SQLite inicializada exitosamente.")
+
+    # 2. Setup RabbitMQ topology if available
+    enable_rabbitmq = os.getenv("ENABLE_RABBITMQ", "true").lower() in ("true", "1", "yes")
+    if enable_rabbitmq:
+        try:
+            rabbitmq.setup_rabbitmq()
+        except Exception as e:
+            logger.warning(f"RabbitMQ no disponible al inicio ({e}). Las conexiones se reintentarán al publicar/consumir.")
+
+    # 3. Start Background Consumer Workers
+    enable_workers = os.getenv("ENABLE_WORKERS", "true").lower() in ("true", "1", "yes")
+    if enable_workers:
+        try:
+            worker.worker_service.start_all()
+        except Exception as e:
+            logger.warning(f"No se pudieron iniciar los workers de RabbitMQ: {e}")
+
+    # 4. Start APScheduler (loads saved configuration from DB or starts default)
+    enable_cron = os.getenv("ENABLE_CRON", "true").lower() in ("true", "1", "yes")
+    if enable_cron:
+        try:
+            scheduler.load_and_start_from_db()
+        except Exception as e:
+            logger.warning(f"No se pudo iniciar el scheduler de cron: {e}")
+
     yield
+
+    # Graceful shutdown
+    worker.worker_service.stop_all()
+    scheduler.stop_scheduler()
 
 app = FastAPI(
     title="Inviernoticias API",
@@ -64,6 +97,20 @@ class SyncPayload(BaseModel):
 class DirectAnalyzePayload(BaseModel):
     text: str
     title: Optional[str] = None
+
+class CronTriggerPayload(BaseModel):
+    feedId: Optional[int] = None
+    hours: Optional[int] = 24
+
+class ModelSelectPayload(BaseModel):
+    model: str
+
+class SchedulerStartPayload(BaseModel):
+    startTime: Optional[str] = None
+    intervalHours: Optional[int] = 24
+    hour: Optional[int] = None
+    minute: Optional[int] = None
+    startImmediately: Optional[bool] = False
 
 # ==========================================
 # SERVER-SIDE RENDERED (SSR) HTML VIEWS
@@ -184,9 +231,38 @@ async def view_article_detail(request: Request, article_id: int, msg: Optional[s
         }
     )
 
+@app.get("/settings", response_class=HTMLResponse)
+async def view_settings(request: Request, msg: Optional[str] = None, err: Optional[str] = None):
+    models = gemini.get_available_models()
+    scheduler_status = scheduler.get_scheduler_status()
+    feeds = db.get_feeds()
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={
+            "active_tab": "settings",
+            "models": models,
+            "scheduler_status": scheduler_status,
+            "feeds": feeds,
+            "message": msg,
+            "error": err
+        }
+    )
+
 # ==========================================
 # FORM ACTION CONTROLLERS (REDIRECTS)
 # ==========================================
+
+@app.post("/action/cron/trigger")
+async def action_cron_trigger(feed_id: Optional[str] = Form(None)):
+    fid = int(feed_id) if feed_id and feed_id.isdigit() else None
+    try:
+        summary = cron.run_24h_cron_sync_and_analyze(feed_id=fid, hours_back=24)
+        msg = f"CronJob 24h ejecutado: {summary.get('synced_count', 0)} importados, {summary.get('dispatched_count', 0)} enviados a RabbitMQ."
+        return RedirectResponse(url=f"/?msg={msg}", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        logger.error(f"Error triggering 24h cronjob: {e}")
+        return RedirectResponse(url=f"/?err=Error+en+CronJob:+{e}", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.post("/action/sync")
 async def action_sync(
@@ -245,6 +321,55 @@ async def action_feed_delete(feed_id: int):
         return RedirectResponse(url="/feeds?msg=Fuente+eliminada+con+éxito", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as e:
         return RedirectResponse(url=f"/feeds?err=Error+al+eliminar+fuente:+{e}", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/action/settings/model")
+async def action_settings_model(model: str = Form(...)):
+    try:
+        gemini.set_default_model(model.strip())
+        return RedirectResponse(
+            url=f"/settings?msg=Modelo+predeterminado+actualizado+a+{model.strip()}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+    except Exception as e:
+        logger.error(f"Error updating default model: {e}")
+        return RedirectResponse(
+            url=f"/settings?err=Error+al+actualizar+modelo:+{e}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+@app.post("/action/settings/scheduler")
+async def action_settings_scheduler(
+    start_time: Optional[str] = Form(None),
+    interval_hours: Optional[int] = Form(24),
+    hour: Optional[str] = Form(None),
+    minute: Optional[str] = Form(None),
+    start_immediately: Optional[str] = Form(None)
+):
+    try:
+        h = int(hour) if hour and hour.strip().isdigit() else None
+        m = int(minute) if minute and minute.strip().isdigit() else None
+        imm = True if start_immediately in ("true", "1", "on", "yes") else False
+        res = scheduler.start_scheduler(
+            start_time=start_time.strip() if start_time and start_time.strip() else None,
+            interval_hours=interval_hours if interval_hours else 24,
+            hour=h,
+            minute=m,
+            start_immediately=imm
+        )
+        msg = f"Scheduler+iniciado+correctamente.+Próxima+ejecución:+{res.get('next_run_time', 'N/A')}"
+        return RedirectResponse(url=f"/settings?msg={msg}", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        logger.error(f"Error starting scheduler: {e}")
+        return RedirectResponse(url=f"/settings?err=Error+al+iniciar+scheduler:+{e}", status_code=status.HTTP_303_SEE_OTHER)
+
+@app.post("/action/settings/scheduler/stop")
+async def action_settings_scheduler_stop():
+    try:
+        scheduler.stop_scheduler()
+        return RedirectResponse(url="/settings?msg=Scheduler+detenido+con+éxito", status_code=status.HTTP_303_SEE_OTHER)
+    except Exception as e:
+        logger.error(f"Error stopping scheduler: {e}")
+        return RedirectResponse(url=f"/settings?err=Error+al+detener+scheduler:+{e}", status_code=status.HTTP_303_SEE_OTHER)
 
 # ==========================================
 # REST API ENDPOINTS (100% POSTMAN COMPATIBLE)
@@ -363,3 +488,99 @@ async def api_sync_notion(article_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to sync to Notion: {e}")
+
+# ==========================================
+# CRON & RABBITMQ ENDPOINTS
+# ==========================================
+
+@app.post("/api/cron/trigger")
+async def api_cron_trigger(payload: Optional[CronTriggerPayload] = None):
+    fid = payload.feedId if payload else None
+    hrs = payload.hours if payload and payload.hours else 24
+    try:
+        summary = cron.run_24h_cron_sync_and_analyze(feed_id=fid, hours_back=hrs)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error executing 24hr CronJob: {e}")
+
+@app.get("/api/cron/status")
+async def api_cron_status():
+    return scheduler.get_scheduler_status()
+
+@app.get("/api/queue/status")
+async def api_queue_status():
+    return rabbitmq.get_queue_status()
+
+# ==========================================
+# AI MODEL CONFIGURATION ENDPOINTS
+# ==========================================
+
+@app.get("/api/models")
+async def api_get_models():
+    """
+    Returns the list of curated Gemini AI models suitable for Mexican satire/bias fact-checking,
+    with their capabilities, recommendations, and the currently active default model flagged.
+    """
+    return {
+        "models": gemini.get_available_models(),
+        "current_default": gemini.get_selected_model()
+    }
+
+@app.post("/api/models/default")
+async def api_set_default_model(payload: ModelSelectPayload):
+    """
+    Selects and persists the default Gemini model used across all automated and direct analyses.
+    """
+    try:
+        updated = gemini.set_default_model(payload.model.strip())
+        return {
+            "message": f"Modelo de IA predeterminado establecido exitosamente en '{updated}'.",
+            "default_model": updated
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al configurar el modelo de IA: {e}")
+
+# ==========================================
+# PARAMETRIZED SCHEDULER MANAGEMENT ENDPOINTS
+# ==========================================
+
+@app.post("/api/scheduler/start")
+async def api_scheduler_start(payload: Optional[SchedulerStartPayload] = None):
+    """
+    Starts or reconfigures the background scheduler with custom timing parameters.
+    - startTime: ISO 8601 datetime (e.g. '2026-10-23T02:00:00Z') or 'HH:MM' (e.g. '03:00')
+    - intervalHours: Recurrence interval in hours (default 24)
+    - hour / minute: Specific daily execution time (e.g. hour=2, minute=0 for 2:00 AM daily)
+    - startImmediately: If true, runs one execution cycle immediately in addition to scheduling
+    """
+    p = payload or SchedulerStartPayload()
+    try:
+        res = scheduler.start_scheduler(
+            start_time=p.startTime,
+            interval_hours=p.intervalHours,
+            hour=p.hour,
+            minute=p.minute,
+            start_immediately=bool(p.startImmediately)
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al iniciar el scheduler: {e}")
+
+@app.post("/api/scheduler/stop")
+async def api_scheduler_stop():
+    """
+    Stops the background scheduler and cancels pending recurring executions.
+    """
+    try:
+        return scheduler.stop_scheduler()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al detener el scheduler: {e}")
+
+@app.get("/api/scheduler/status")
+async def api_scheduler_status():
+    """
+    Returns the current execution state, active job, next run time, and saved configuration of the scheduler.
+    """
+    return scheduler.get_scheduler_status()

@@ -703,6 +703,101 @@
 							}
 						}
 					]
+				},
+				{
+					"name": "Get Available AI Models",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/models",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"models"
+							]
+						},
+						"description": "Lista los modelos de Google Gemini disponibles y adecuados para detección de sátira mexicana, contrastación de fuentes y modismos, indicando el modelo actualmente predeterminado."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains models and current_default\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"models\");",
+									"    pm.expect(jsonData).to.have.property(\"current_default\");",
+									"    pm.expect(jsonData.models).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Set Default AI Model",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"model\": \"gemini-2.5-flash\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/models/default",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"models",
+								"default"
+							]
+						},
+						"description": "Establece y persiste en SQLite el modelo de Gemini a utilizar de manera predeterminada en todas las evaluaciones automáticas y manuales."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Model updated successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"default_model\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
 				}
 			],
 			"description": "Endpoints de inferencia y evaluación con Inteligencia Artificial utilizando Google Gemini."
@@ -804,6 +899,291 @@
 				}
 			],
 			"description": "Endpoints de exportación y sincronización de artículos calificados hacia bases de datos de Notion."
+		},
+		{
+			"name": "07. CronJob & RabbitMQ Messaging",
+			"item": [
+				{
+					"name": "Trigger 24h CronJob",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"feedId\": {{feedId}},\n  \"hours\": 24\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/cron/trigger",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cron",
+								"trigger"
+							]
+						},
+						"description": "Dispara manualmente el proceso de 24 horas: calcula la ventana de tiempo (ahora vs 24h atrás), sincroniza el feed configurado, busca artículos sin analizar y despacha un mensaje a RabbitMQ por cada uno."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Cron summary contains required fields\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"status\");",
+									"    pm.expect(jsonData).to.have.property(\"start_date\");",
+									"    pm.expect(jsonData).to.have.property(\"end_date\");",
+									"    pm.expect(jsonData).to.have.property(\"dispatched_count\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Cron Scheduler Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/cron/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cron",
+								"status"
+							]
+						},
+						"description": "Consulta el estado del programador en segundo plano (APScheduler) y los próximos horarios de ejecución del CronJob de 24 horas."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Scheduler status is boolean\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"running\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Queue & RabbitMQ Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/queue/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"queue",
+								"status"
+							]
+						},
+						"description": "Consulta el conteo de mensajes pendientes en las colas de RabbitMQ (analyze, notion, retry y failed/DLX)."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains status\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"status\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Start or Configure Scheduler (Parametrized)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"startTime\": \"03:00\",\n  \"intervalHours\": 24,\n  \"startImmediately\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/scheduler/start",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"scheduler",
+								"start"
+							]
+						},
+						"description": "Inicia o reprograma el planificador en segundo plano (APScheduler) especificando cuándo debe iniciar la primera ejecución (hora 'HH:MM' o fecha ISO completa), el intervalo de horas y si debe ejecutar una ronda inmediatamente."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Scheduler started response\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql(\"started\");",
+									"    pm.expect(jsonData).to.have.property(\"next_run_time\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Parametrized Scheduler Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/scheduler/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"scheduler",
+								"status"
+							]
+						},
+						"description": "Obtiene el diagnóstico detallado del planificador: estado de ejecución, próxima corrida y configuración guardada."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Scheduler diagnostic properties\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"running\");",
+									"    pm.expect(jsonData).to.have.property(\"saved_config\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Stop Scheduler",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/scheduler/stop",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"scheduler",
+								"stop"
+							]
+						},
+						"description": "Detiene y desactiva las ejecuciones periódicas del planificador APScheduler."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Scheduler stopped response\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"status\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Control y monitoreo del flujo asíncrono dirigido por eventos: CronJob de 24 horas, colas de RabbitMQ y DLX."
 		}
 	]
 }

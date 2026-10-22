@@ -16,6 +16,14 @@ Detector de Sátira, Veracidad y Sesgo en Medios y Noticias de México, impulsad
 - **Exportación a Notion**: Sincronización directa de artículos analizados hacia una base de datos en Notion.
 - **Sincronización Automatizada de RSS**: Agrega, gestiona y sincroniza múltiples fuentes de noticias.
 - **Análisis Directo de Texto**: Pega titulares o cadenas de mensajes para analizarlos al instante.
+- **Selección de Modelos de IA & Recomendaciones**: Permite seleccionar dinámicamente y persistir en base de datos el modelo de Gemini activo (`gemini-2.5-flash` recomendado, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`, etc.) con soporte para Search Grounding.
+- **Planificador Parametrizado (APScheduler)**: Configuración flexible de cuándo iniciar la primera ejecución (hora fija `HH:MM` o fecha ISO), intervalo en horas (`interval_hours`), hora diaria programada y ejecución inmediata opcional.
+- **CronJob Automatizado cada 24 Horas**: Proceso periódico que calcula la ventana de las últimas 24 horas (`start_date = now - 24h`, `end_date = now`), sincroniza la fuente configurada y encola artículos sin analizar.
+- **Pipeline Asíncrono con RabbitMQ (Topic Exchange & DLX)**:
+  - Enrutamiento por tipo de artículo hacia el exchange de tópicos `articles.exchange`.
+  - Worker 1 (*Analyzer Consumer*): ejecuta inferencia con Gemini y despacha solicitud a Notion enrutada según tipo (`mockticia` vs `realticia`).
+  - Worker 2 (*Notion Consumer*): publica el artículo calificado en Notion.
+  - Reprocesamiento con Dead Letter Exchange (**DLX**): si un mensaje falla, se redirige a una cola de retraso con TTL para reintentar automáticamente más tarde.
 
 ---
 
@@ -26,8 +34,12 @@ inviernoticias/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # Aplicación FastAPI, vistas SSR y endpoints REST
-│   ├── db.py                # Base de datos SQLite (feeds, artículos y análisis)
-│   ├── gemini.py            # Integración oficial Google GenAI SDK con Search Grounding
+│   ├── db.py                # Base de datos SQLite (feeds, artículos, análisis y settings)
+│   ├── gemini.py            # Modelos Gemini, SDK Google GenAI y Search Grounding
+│   ├── scheduler.py         # Planificador parametrizable con APScheduler
+│   ├── worker.py            # Workers de consumo de colas RabbitMQ
+│   ├── cron.py              # Lógica de sincronización 24h y RabbitMQ dispatch
+│   ├── rabbitmq.py          # Topología RabbitMQ, exchanges, colas y DLX
 │   ├── rss.py               # Sincronizador de feeds RSS (feedparser)
 │   ├── notion.py            # Conector con la API de Notion
 │   ├── static/
@@ -37,6 +49,7 @@ inviernoticias/
 │       ├── index.html       # Monitoreo de artículos, filtros y medidores
 │       ├── feeds.html       # Administración de fuentes RSS
 │       ├── direct.html      # Análisis directo de texto libre
+│       ├── settings.html    # Configuración de modelo de IA y planificador
 │       └── article_detail.html # Ficha técnica completa del análisis
 ├── postman/
 │   ├── Inviernoticias_API.postman_collection.json # Colección de pruebas de Postman
@@ -127,6 +140,14 @@ Se incluye la colección completa para probar todos los endpoints REST:
 | `/api/feeds/sync` | `POST` | Sincronizar artículos desde RSS |
 | `/api/articles` | `GET` | Listar artículos (soporta paginación y filtros) |
 | `/api/articles/:id` | `GET` | Detalle de un artículo |
+| `/api/models` | `GET` | Lista de modelos Gemini adecuados y modelo activo |
+| `/api/models/default` | `POST` | Establecer y persistir modelo de IA predeterminado |
 | `/api/analyze` | `POST` | Análisis directo de texto libre con IA |
 | `/api/articles/:id/analyze` | `POST` | Análisis inteligente de un artículo guardado |
 | `/api/articles/:id/notion` | `POST` / `GET` | Exportar análisis a Notion |
+| `/api/scheduler/start` | `POST` | Iniciar / parametrizar planificador (inicio y周期) |
+| `/api/scheduler/stop` | `POST` | Detener planificador en segundo plano |
+| `/api/scheduler/status` | `GET` | Estado detallado, próxima ejecución y config |
+| `/api/cron/trigger` | `POST` | Disparar manualmente el CronJob de 24 horas |
+| `/api/cron/status` | `GET` | Estado del planificador APScheduler |
+| `/api/queue/status` | `GET` | Monitoreo y conteo de mensajes en colas de RabbitMQ |

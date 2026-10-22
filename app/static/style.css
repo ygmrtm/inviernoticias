@@ -436,3 +436,53 @@ footer {
   border-top: 1px solid var(--border-color);
   margin-top: 4rem;
 }
+
+/* Settings & Model Selector */
+.model-option-card {
+  display: block;
+  position: relative;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  background-color: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.model-option-card:hover {
+  border-color: var(--primary);
+  background-color: #172033;
+}
+
+.model-option-card input[type="radio"] {
+  width: 22px;
+  height: 22px;
+  margin-right: 0.75rem;
+  accent-color: var(--gold);
+}
+
+.model-option-card.active-model {
+  border-color: var(--gold);
+  background-color: rgba(251, 191, 36, 0.05);
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.status-pill-active {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid var(--success);
+}
+
+.status-pill-stopped {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid var(--danger);
+}
