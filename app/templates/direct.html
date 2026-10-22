@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Análisis Directo de Texto - Inviernoticias{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1 class="card-title">✍️ Análisis Directo de Texto o Rumores</h1>
+  <p style="color: var(--text-muted); font-size: 1.15rem;">
+    Pega cualquier titular, párrafo de noticia o mensaje de redes para evaluar si es sátira ("Mock-ticia"), noticia real ("Real-ticia"), su nivel de sarcasmo y si califica para el premio "México Mágico".
+  </p>
+</div>
+
+<!-- Input Form -->
+<div class="card">
+  <form action="/direct" method="post">
+    <div class="form-group">
+      <label for="direct-title">Titular o Resumen (Opcional):</label>
+      <input type="text" id="direct-title" name="title" value="{{ submitted_title or '' }}" placeholder="Ej. Diputados aprueban ley para declarar los tacos patrimonio intergaláctico">
+    </div>
+
+    <div class="form-group">
+      <label for="direct-text">Texto Completo de la Noticia / Aviso / Mensaje:</label>
+      <textarea id="direct-text" name="text" placeholder="Pega el contenido del artículo o mensaje aquí..." required>{{ submitted_text or '' }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="font-size: 1.25rem; padding: 1rem 2rem; width: 100%;">
+      🤖 Analizar Texto con Gemini IA
+    </button>
+  </form>
+</div>
+
+<!-- Analysis Results (if submitted) -->
+{% if result %}
+  <div class="card" style="border: 2px solid var(--primary);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <h2 style="font-size: 1.8rem;">📋 Resultados del Análisis</h2>
+      
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        {% if result.isSatire %}
+          <span class="badge badge-satire" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">🎭 Mock-ticia (Sátira)</span>
+        {% else %}
+          <span class="badge badge-real" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">📰 Real-ticia (Noticia Real)</span>
+        {% endif %}
+
+        {% if result.mexicoMagicoAward %}
+          <span class="badge badge-magico" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">🇲🇽 Premio México Mágico</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Meters -->
+    <div class="meters-grid" style="margin-top: 1.5rem;">
+      <div class="meter-card">
+        <div class="meter-label">
+          <span>Nivel de Veracidad:</span>
+          <span style="color: var(--success); font-size: 1.3rem;">{{ result.truthScore }}%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill fill-truth" style="width: {{ result.truthScore }}%;"></div>
+        </div>
+      </div>
+
+      <div class="meter-card">
+        <div class="meter-label">
+          <span>Índice de Sarcasmo:</span>
+          <span style="color: var(--warning); font-size: 1.3rem;">{{ result.sarcasmScore }}%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill fill-sarcasm" style="width: {{ result.sarcasmScore }}%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Refrán y Cita -->
+    {% if result.refran and result.refran != 'N/A' %}
+      <div class="quote-box">
+        <span style="font-weight: 700; color: var(--gold); display: block; margin-bottom: 0.25rem;">🇲🇽 Refrán Popular Mexicano:</span>
+        "{{ result.refran }}"
+      </div>
+    {% endif %}
+
+    {% if result.historicalQuote %}
+      <div class="quote-box" style="border-left-color: #38bdf8;">
+        <span style="font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.25rem;">📜 Cita Histórica:</span>
+        "{{ result.historicalQuote }}"
+      </div>
+    {% endif %}
+
+    <!-- Info boxes -->
+    <div class="info-box">
+      <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: #93c5fd;">💡 Resumen del Análisis:</h3>
+      <p style="font-size: 1.15rem;">{{ result.analysisSummary }}</p>
+    </div>
+
+    <div class="info-box" style="border-left-color: #a855f7;">
+      <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: #d8b4fe;">🌎 Explicación para Extranjeros:</h3>
+      <p style="font-size: 1.15rem;">{{ result.foreignerExplanation }}</p>
+    </div>
+
+    {% if result.mexicanCultureReferences %}
+      <div class="info-box" style="border-left-color: #10b981;">
+        <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: #6ee7b7;">🇲🇽 Referencias Culturales y Jerga:</h3>
+        <p style="font-size: 1.15rem;">{{ result.mexicanCultureReferences }}</p>
+      </div>
+    {% endif %}
+
+    {% if result.relatedSources %}
+      <div class="card" style="background-color: #0f172a; margin-top: 1.5rem;">
+        <h3 style="font-size: 1.25rem; margin-bottom: 0.75rem;">🔍 Fuentes Contrastadas (Búsqueda en Google):</h3>
+        <ul style="padding-left: 1.5rem; font-size: 1.1rem; color: #cbd5e1;">
+          {% for src in result.relatedSources %}
+            <li style="margin-bottom: 0.5rem;">
+              {% if src.startswith('http') %}
+                <a href="{{ src }}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">{{ src }}</a>
+              {% else %}
+                {{ src }}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

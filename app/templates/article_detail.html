@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}{{ article.title }} - Detalle del Análisis{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1.5rem;">
+  <a href="/" class="btn btn-secondary btn-sm">
+    &larr; Volver a Artículos
+  </a>
+</div>
+
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+    <h1 style="font-size: 2rem; color: var(--text-main); line-height: 1.3;">
+      {{ article.title }}
+    </h1>
+
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      {% if article.analysis_obj %}
+        {% if article.analysis_obj.isSatire %}
+          <span class="badge badge-satire" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">🎭 Mock-ticia (Sátira)</span>
+        {% else %}
+          <span class="badge badge-real" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">📰 Real-ticia (Noticia Real)</span>
+        {% endif %}
+
+        {% if article.analysis_obj.mexicoMagicoAward %}
+          <span class="badge badge-magico" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">🇲🇽 Premio México Mágico</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="article-meta" style="margin-top: 0.75rem; font-size: 1.1rem;">
+    Fuente: <strong>{{ article.feed_name or 'RSS Directo' }}</strong> &bull;
+    Publicado: {{ article.pub_date[:16].replace('T', ' ') if article.pub_date else 'Desconocido' }}
+    {% if article.link %}
+      &bull; <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">Leer en el portal original &UpperRightArrow;</a>
+    {% endif %}
+  </p>
+
+  <div style="background-color: #0f172a; padding: 1.5rem; border-radius: var(--radius); margin: 1.5rem 0; font-size: 1.15rem;">
+    {{ article.content or 'Sin descripción proporcionada en el RSS.' }}
+  </div>
+
+  {% if article.analysis_obj %}
+    <!-- Meters Section -->
+    <h2 style="font-size: 1.5rem; margin-top: 2rem; margin-bottom: 1rem;">📊 Evaluación de Veracidad y Sarcasmo</h2>
+    <div class="meters-grid">
+      <div class="meter-card">
+        <div class="meter-label">
+          <span>Nivel de Veracidad:</span>
+          <span style="color: var(--success); font-size: 1.3rem;">{{ article.analysis_obj.truthScore }}%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill fill-truth" style="width: {{ article.analysis_obj.truthScore }}%;"></div>
+        </div>
+      </div>
+
+      <div class="meter-card">
+        <div class="meter-label">
+          <span>Índice de Sarcasmo:</span>
+          <span style="color: var(--warning); font-size: 1.3rem;">{{ article.analysis_obj.sarcasmScore }}%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill fill-sarcasm" style="width: {{ article.analysis_obj.sarcasmScore }}%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Refrán y Cita Histórica -->
+    {% if article.analysis_obj.refran and article.analysis_obj.refran != 'N/A' %}
+      <div class="quote-box">
+        <span style="font-weight: 700; color: var(--gold); display: block; margin-bottom: 0.25rem;">🇲🇽 Refrán Popular Mexicano:</span>
+        "{{ article.analysis_obj.refran }}"
+      </div>
+    {% endif %}
+
+    {% if article.analysis_obj.historicalQuote %}
+      <div class="quote-box" style="border-left-color: #38bdf8;">
+        <span style="font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.25rem;">📜 Cita Histórica:</span>
+        "{{ article.analysis_obj.historicalQuote }}"
+      </div>
+    {% endif %}
+
+    <!-- Análisis Detallado -->
+    <div class="info-box">
+      <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: #93c5fd;">💡 Resumen del Análisis:</h3>
+      <p style="font-size: 1.15rem;">{{ article.analysis_obj.analysisSummary }}</p>
+    </div>
+
+    <div class="info-box" style="border-left-color: #a855f7;">
+      <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: #d8b4fe;">🌎 Explicación para Extranjeros:</h3>
+      <p style="font-size: 1.15rem;">{{ article.analysis_obj.foreignerExplanation }}</p>
+    </div>
+
+    {% if article.analysis_obj.mexicanCultureReferences %}
+      <div class="info-box" style="border-left-color: #10b981;">
+        <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: #6ee7b7;">🇲🇽 Referencias Culturales y Jerga:</h3>
+        <p style="font-size: 1.15rem;">{{ article.analysis_obj.mexicanCultureReferences }}</p>
+      </div>
+    {% endif %}
+
+    {% if article.analysis_obj.relatedSources %}
+      <div class="card" style="background-color: #0f172a; margin-top: 1.5rem;">
+        <h3 style="font-size: 1.25rem; margin-bottom: 0.75rem;">🔍 Fuentes Contrastadas (Búsqueda en Google):</h3>
+        <ul style="padding-left: 1.5rem; font-size: 1.1rem; color: #cbd5e1;">
+          {% for src in article.analysis_obj.relatedSources %}
+            <li style="margin-bottom: 0.5rem;">
+              {% if src.startswith('http') %}
+                <a href="{{ src }}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">{{ src }}</a>
+              {% else %}
+                {{ src }}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <!-- Notion Export -->
+    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      {% if article.notion_page_id %}
+        <span class="badge" style="background-color: #064e3b; color: #6ee7b7; padding: 0.75rem 1.5rem; font-size: 1.1rem;">
+          ✓ Publicado en Notion Database (ID: {{ article.notion_page_id[:8] }}...)
+        </span>
+      {% else %}
+        <form action="/action/notion/{{ article.id }}" method="post">
+          <button type="submit" class="btn btn-success">
+            📤 Publicar este Análisis en Notion
+          </button>
+        </form>
+      {% endif %}
+
+      <form action="/action/analyze/{{ article.id }}" method="post">
+        <button type="submit" class="btn btn-secondary">
+          🔄 Volver a Analizar con IA
+        </button>
+      </form>
+    </div>
+
+  {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; background-color: #0f172a; border-radius: var(--radius); margin-top: 1.5rem;">
+      <p style="font-size: 1.4rem; margin-bottom: 1.5rem;">Este artículo aún no ha sido analizado por la Inteligencia Artificial.</p>
+      <form action="/action/analyze/{{ article.id }}" method="post">
+        <button type="submit" class="btn btn-primary" style="font-size: 1.3rem; padding: 1rem 2rem;">
+          🤖 Analizar con Gemini Ahora
+        </button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

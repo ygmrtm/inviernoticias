@@ -1,0 +1,58 @@
+name: Deploy to Lenovo Server
+
+on:
+  push:
+    branches:
+      - main # change to your default branch if it's different (e.g. master)
+
+jobs:
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # NOTE: Since the Lenovo Server is on a private network (192.168.100.33),
+      # public GitHub runners cannot reach it directly.
+      # You can connect to your local network using one of these options:
+      #
+      # Option A: Tailscale (Recommended & easiest)
+      # Uncomment the step below and set TS_AUTHKEY in your GitHub repository secrets.
+      # - name: Connect to Tailscale
+      #   uses: tailscale/github-action@v2
+      #   with:
+      #     authkey: ${{ secrets.TS_AUTHKEY }}
+      #
+      # Option B: Run a self-hosted runner inside your local network on the Lenovo server.
+      # If you run a self-hosted runner, change 'runs-on: ubuntu-latest' to 'runs-on: self-hosted'.
+
+      - name: Set up SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Add Lenovo server to known_hosts
+          ssh-keyscan -H 192.168.100.33 >> ~/.ssh/known_hosts || true
+
+      - name: Sync Project Files
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_rsa" \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude '.env' \
+            --exclude 'backend/inviernoticias.db*' \
+            --exclude 'backend/node_modules' \
+            --exclude 'frontend/node_modules' \
+            --exclude 'frontend/dist' \
+            ./ ${{ secrets.SSH_USER }}@192.168.100.33:~/apps/inviernoticias
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@192.168.100.33 "
+            cd ~/apps/inviernoticias &&
+            docker compose down &&
+            docker compose up -d --build
+          "

@@ -1,0 +1,18 @@
+services:
+  inviernoticias:
+    build: .
+    container_name: inviernoticias-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_PATH=/data/inviernoticias.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+    volumes:
+      - inviernoticias_data:/data
+
+volumes:
+  inviernoticias_data:

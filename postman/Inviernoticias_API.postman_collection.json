@@ -1,0 +1,809 @@
+{
+	"info": {
+		"_postman_id": "b73a98e1-5f21-4d37-8b90-1c58de82e6d1",
+		"name": "Inviernoticias API",
+		"description": "Colección completa de Postman para probar todos los endpoints de Inviernoticias: Detector de Sátira / Fake News, Sesgo, Calificador de México Mágico, Sincronizador de RSS feeds, Análisis con Gemini 2.5 Flash (Search Grounding) e Integración con Notion.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3001",
+			"type": "string"
+		},
+		{
+			"key": "feedId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "articleId",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "01. Health Check",
+			"item": [
+				{
+					"name": "Health Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"health"
+							]
+						},
+						"description": "Verifica que el servidor backend de Inviernoticias esté activo y respondiendo correctamente."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Service status is ok\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql(\"ok\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Endpoints de verificación de estado y conectividad del servicio."
+		},
+		{
+			"name": "02. Feeds Management",
+			"item": [
+				{
+					"name": "Get All Feeds",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/feeds",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"feeds"
+							]
+						},
+						"description": "Obtiene la lista completa de feeds RSS registrados en SQLite. Guarda automáticamente el ID del primer feed en la variable `{{feedId}}`."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response is an array of feeds\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an(\"array\");",
+									"    if (jsonData.length > 0 && jsonData[0].id) {",
+									"        pm.collectionVariables.set(\"feedId\", jsonData[0].id.toString());",
+									"        console.log(\"Saved feedId: \" + jsonData[0].id);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Add New Feed",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Aristegui Noticias\",\n  \"url\": \"https://aristeguinoticias.com/feed/\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/feeds",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"feeds"
+							]
+						},
+						"description": "Registra una nueva fuente RSS en el sistema."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201 or 400 (if already exists)\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([201, 400]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Delete Feed by ID",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/feeds/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"feeds",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{feedId}}",
+									"description": "ID del feed a eliminar"
+								}
+							]
+						},
+						"description": "Elimina un feed RSS por su ID numérico."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response contains confirmation\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.message).to.include(\"Feed deleted successfully\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Operaciones CRUD para la gestión de fuentes de noticias RSS."
+		},
+		{
+			"name": "03. Feeds Sync",
+			"item": [
+				{
+					"name": "Sync All Feeds",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"limit\": 25\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/feeds/sync",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"feeds",
+								"sync"
+							]
+						},
+						"description": "Descarga y procesa artículos recientes de todas las fuentes RSS configuradas y los almacena en SQLite."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response returns syncedCount\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"syncedCount\");",
+									"    pm.expect(jsonData).to.have.property(\"message\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Sync Specific Feed (with Date Filter)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"feedId\": {{feedId}},\n  \"limit\": 10,\n  \"dateRangeStart\": \"2025-01-01T00:00:00.000Z\",\n  \"dateRangeEnd\": \"2026-12-31T23:59:59.000Z\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/feeds/sync",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"feeds",
+								"sync"
+							]
+						},
+						"description": "Sincroniza únicamente el feed especificado filtrando los artículos por rango de fechas de publicación."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Descarga y sincronización periódica de artículos desde las fuentes RSS."
+		},
+		{
+			"name": "04. Articles",
+			"item": [
+				{
+					"name": "List Articles (All / Paginated)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles?limit=20&offset=0",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Cantidad de artículos a retornar"
+								},
+								{
+									"key": "offset",
+									"value": "0",
+									"description": "Desplazamiento para paginación"
+								}
+							]
+						},
+						"description": "Obtiene la lista paginada de artículos guardados. Guarda automáticamente el ID del primer artículo en la variable `{{articleId}}`."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response is an array of articles\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an(\"array\");",
+									"    if (jsonData.length > 0 && jsonData[0].id) {",
+									"        pm.collectionVariables.set(\"articleId\", jsonData[0].id.toString());",
+									"        console.log(\"Saved articleId: \" + jsonData[0].id);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "List Articles (Filtered: Unanalyzed Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles?limit=10&offset=0&hasAnalysis=false",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								},
+								{
+									"key": "hasAnalysis",
+									"value": "false",
+									"description": "Filtrar únicamente artículos pendientes de análisis"
+								}
+							]
+						},
+						"description": "Filtra artículos que aún no han sido analizados por la IA."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "List Articles (Filtered: Analyzed Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles?limit=10&offset=0&hasAnalysis=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								},
+								{
+									"key": "hasAnalysis",
+									"value": "true",
+									"description": "Filtrar únicamente artículos ya analizados"
+								}
+							]
+						},
+						"description": "Filtra artículos que ya cuentan con análisis de Gemini y puntuaciones guardadas."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "List Articles (Filtered by Feed ID)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles?feedId={{feedId}}&limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles"
+							],
+							"query": [
+								{
+									"key": "feedId",
+									"value": "{{feedId}}",
+									"description": "Filtrar por ID específico de fuente RSS"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Consulta artículos asociados exclusivamente a una fuente RSS determinada."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Article by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{articleId}}",
+									"description": "ID del artículo a consultar"
+								}
+							]
+						},
+						"description": "Recupera los datos completos de un artículo específico almacenado en la base de datos."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 404\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    pm.test(\"Article schema verification\", function () {",
+									"        var jsonData = pm.response.json();",
+									"        pm.expect(jsonData).to.have.property(\"id\");",
+									"        pm.expect(jsonData).to.have.property(\"title\");",
+									"        pm.expect(jsonData).to.have.property(\"content\");",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Consultas, filtrado y paginación sobre los artículos sincronizados."
+		},
+		{
+			"name": "05. AI Analysis (Gemini + Grounding)",
+			"item": [
+				{
+					"name": "Analyze Direct Text (Custom Input)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Científicos de la UNAM descubren que los tacos al pastor curan el mal de amores\",\n  \"text\": \"Un equipo multidisciplinario de taqueros e investigadores de la máxima casa de estudios determinó que una orden de cinco tacos con copia, cilantro, cebolla y salsa de la que sí pica provoca una liberación masiva de endorfinas que elimina el dolor del desamor en menos de 15 minutos.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/analyze",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"analyze"
+							]
+						},
+						"description": "Envía texto libre (noticia, aviso o rumor) para ser analizado directamente por Google Gemini 2.5 Flash con Search Grounding para contrastar fuentes en tiempo real."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Analysis structure matches schema\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"isSatire\");",
+									"    pm.expect(jsonData).to.have.property(\"truthScore\");",
+									"    pm.expect(jsonData).to.have.property(\"sarcasmScore\");",
+									"    pm.expect(jsonData).to.have.property(\"mexicoMagicoAward\");",
+									"    pm.expect(jsonData).to.have.property(\"analysisSummary\");",
+									"    pm.expect(jsonData).to.have.property(\"foreignerExplanation\");",
+									"    pm.expect(jsonData).to.have.property(\"relatedSources\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Analyze Synced Article by ID",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles/:id/analyze",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles",
+								":id",
+								"analyze"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{articleId}}",
+									"description": "ID del artículo sincronizado a analizar"
+								}
+							]
+						},
+						"description": "Ejecuta el análisis inteligente con Gemini 2.5 Flash sobre un artículo ya registrado en la base de datos y guarda los resultados en la columna `analysis`."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Analysis returned and verified\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"isSatire\");",
+									"    pm.expect(jsonData).to.have.property(\"truthScore\");",
+									"    pm.expect(jsonData).to.have.property(\"sarcasmScore\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Endpoints de inferencia y evaluación con Inteligencia Artificial utilizando Google Gemini."
+		},
+		{
+			"name": "06. Notion Integration",
+			"item": [
+				{
+					"name": "Publish Article to Notion (POST)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles/:id/notion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles",
+								":id",
+								"notion"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{articleId}}",
+									"description": "ID del artículo analizado a exportar"
+								}
+							]
+						},
+						"description": "Publica los resultados del análisis y datos del artículo en la base de datos de Notion configurada en `.env` (requiere `NOTION_TOKEN` y `NOTION_DATABASE_ID`)."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200, 400 (not analyzed) or 500 (notion not configured)\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 400, 500]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Publish Article to Notion (GET - Browser Trigger)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/articles/:id/notion",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"articles",
+								":id",
+								"notion"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{articleId}}",
+									"description": "ID del artículo analizado a exportar"
+								}
+							]
+						},
+						"description": "Disparador GET alternativo para publicar a Notion directamente desde hipervínculos o navegadores."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200, 400 (not analyzed) or 500 (notion not configured)\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 400, 500]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Endpoints de exportación y sincronización de artículos calificados hacia bases de datos de Notion."
+		}
+	]
+}

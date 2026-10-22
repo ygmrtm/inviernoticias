@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Inviernoticias - Detector de Sátira y Sesgo{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-container">
+      <a href="/" class="logo">
+        ❄️ Inviernoticias <span>.mx</span>
+      </a>
+      <nav>
+        <a href="/" class="{% if active_tab == 'articles' %}active{% endif %}">📰 Artículos</a>
+        <a href="/feeds" class="{% if active_tab == 'feeds' %}active{% endif %}">📡 Fuentes RSS</a>
+        <a href="/direct" class="{% if active_tab == 'direct' %}active{% endif %}">✍️ Análisis Directo</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    {% if message %}
+      <div class="alert alert-success" role="status">
+        ✅ {{ message }}
+      </div>
+    {% endif %}
+
+    {% if error %}
+      <div class="alert alert-error" role="alert">
+        ⚠️ {{ error }}
+      </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <p>❄️ Inviernoticias &mdash; Sistema de Detección de Sátira, Veracidad y Sesgo en Medios Mexicanos.</p>
+    <p style="margin-top: 0.5rem; font-size: 0.95rem; color: #64748b;">
+      Impulsado por Google Gemini 2.5 Flash con Búsqueda Integrada &bull; Cero JavaScript &bull; Accesible para Adultos Mayores
+    </p>
+  </footer>
+</body>
+</html>
