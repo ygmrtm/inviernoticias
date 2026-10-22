@@ -1,0 +1,46 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: inviernoticias-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # RabbitMQ Management Web Dashboard
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  inviernoticias:
+    build: .
+    container_name: inviernoticias-app
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_PATH=/data/inviernoticias.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - ENABLE_RABBITMQ=true
+      - ENABLE_WORKERS=true
+      - ENABLE_CRON=true
+      - CRON_INTERVAL_HOURS=24
+      - CRON_FEED_ID=1
+    volumes:
+      - inviernoticias_data:/data
+
+volumes:
+  inviernoticias_data:
+  rabbitmq_data:

@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Artículos Sincronizados - Inviernoticias{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 class="card-title">📰 Artículos y Monitoreo de Noticias</h1>
+      <p style="color: var(--text-muted);">
+        Noticias importadas desde fuentes RSS mexicanas para detección de sátira, sesgo y surrealismo.
+      </p>
+    </div>
+    
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+      <!-- 24h Cron Trigger Form -->
+      <form action="/action/cron/trigger" method="post">
+        <button type="submit" class="btn btn-secondary" title="Dispara el proceso de las últimas 24 horas y envía artículos a RabbitMQ">
+          ⏱️ Ejecutar Cron 24h
+        </button>
+      </form>
+
+      <!-- Quick Sync Form (Pure HTML POST) -->
+      <form action="/action/sync" method="post">
+        <input type="hidden" name="limit" value="20">
+        <button type="submit" class="btn btn-primary">
+          🔄 Sincronizar Feeds Ahora
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<form action="/" method="get" class="filter-bar">
+  <div class="form-group">
+    <label for="filter-feed">Fuente RSS:</label>
+    <select id="filter-feed" name="feed_id">
+      <option value="">-- Todas las Fuentes --</option>
+      {% for f in feeds %}
+        <option value="{{ f.id }}" {% if current_feed_id == f.id %}selected{% endif %}>{{ f.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="filter-analysis">Estado de Análisis:</label>
+    <select id="filter-analysis" name="has_analysis">
+      <option value="" {% if current_has_analysis is none %}selected{% endif %}>-- Todos los Artículos --</option>
+      <option value="true" {% if current_has_analysis == 'true' %}selected{% endif %}>✅ Solo Analizados</option>
+      <option value="false" {% if current_has_analysis == 'false' %}selected{% endif %}>⏳ Pendientes de Análisis</option>
+    </select>
+  </div>
+
+  <div style="align-self: flex-end;">
+    <button type="submit" class="btn btn-secondary">
+      🔍 Aplicar Filtros
+    </button>
+  </div>
+</form>
+
+<!-- Articles Feed List -->
+<div class="card">
+  {% if articles|length == 0 %}
+    <div style="text-align: center; padding: 3rem 1rem;">
+      <p style="font-size: 1.5rem; margin-bottom: 1rem; color: var(--text-muted);">
+        No se encontraron artículos con los filtros seleccionados.
+      </p>
+      <form action="/action/sync" method="post">
+        <input type="hidden" name="limit" value="30">
+        <button type="submit" class="btn btn-primary">
+          📥 Sincronizar Nuevos Artículos
+        </button>
+      </form>
+    </div>
+  {% else %}
+    {% for article in articles %}
+      <div class="article-item">
+        <div class="article-header">
+          <div>
+            <a href="/articles/{{ article.id }}" class="article-title-link">
+              {{ article.title }}
+            </a>
+            <div class="article-meta">
+              {% if article.feed_name %}
+                <strong>{{ article.feed_name }}</strong> &bull;
+              {% endif %}
+              Publicado: {{ article.pub_date[:16].replace('T', ' ') if article.pub_date else 'Desconocido' }}
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            {% if article.analysis_obj %}
+              {% if article.analysis_obj.isSatire %}
+                <span class="badge badge-satire">🎭 Mock-ticia</span>
+              {% else %}
+                <span class="badge badge-real">📰 Real-ticia</span>
+              {% endif %}
+
+              {% if article.analysis_obj.mexicoMagicoAward %}
+                <span class="badge badge-magico">🇲🇽 México Mágico</span>
+              {% endif %}
+            {% else %}
+              <span class="badge" style="background-color: #334155; color: #94a3b8;">⏳ Sin Analizar</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if article.content %}
+          <p class="article-snippet">
+            {{ article.content[:280] }}{% if article.content|length > 280 %}...{% endif %}
+          </p>
+        {% endif %}
+
+        {% if article.analysis_obj %}
+          <div class="meters-grid" style="margin: 0.75rem 0;">
+            <div class="meter-card">
+              <div class="meter-label">
+                <span>Veracidad:</span>
+                <span style="color: var(--success);">{{ article.analysis_obj.truthScore }}%</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill fill-truth" style="width: {{ article.analysis_obj.truthScore }}%;"></div>
+              </div>
+            </div>
+
+            <div class="meter-card">
+              <div class="meter-label">
+                <span>Sarcasmo:</span>
+                <span style="color: var(--warning);">{{ article.analysis_obj.sarcasmScore }}%</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill fill-sarcasm" style="width: {{ article.analysis_obj.sarcasmScore }}%;"></div>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="article-actions">
+          <a href="/articles/{{ article.id }}" class="btn btn-secondary btn-sm">
+            🔍 Ver Detalle Completo
+          </a>
+
+          {% if not article.analysis_obj %}
+            <form action="/action/analyze/{{ article.id }}" method="post" style="display: inline;">
+              <button type="submit" class="btn btn-primary btn-sm">
+                🤖 Analizar con IA
+              </button>
+            </form>
+          {% else %}
+            {% if article.notion_page_id %}
+              <span class="badge" style="background-color: #064e3b; color: #6ee7b7; padding: 0.5rem 1rem;">
+                ✓ Publicado en Notion
+              </span>
+            {% else %}
+              <form action="/action/notion/{{ article.id }}" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-success btn-sm">
+                  📤 Exportar a Notion
+                </button>
+              </form>
+            {% endif %}
+          {% endif %}
+
+          {% if article.link %}
+            <a href="{{ article.link }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="background: transparent; border: 1px solid var(--border-color);">
+              🔗 Fuente Original &UpperRightArrow;
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <!-- Pagination Controls -->
+    <div class="pagination">
+      {% if offset > 0 %}
+        <a href="/?offset={{ [0, offset - limit]|max }}&limit={{ limit }}{% if current_feed_id %}&feed_id={{ current_feed_id }}{% endif %}{% if current_has_analysis %}&has_analysis={{ current_has_analysis }}{% endif %}" class="btn btn-secondary">
+          &larr; Página Anterior
+        </a>
+      {% endif %}
+
+      <span style="color: var(--text-muted); font-weight: 600;">
+        Página {{ (offset // limit) + 1 }}
+      </span>
+
+      {% if articles|length == limit %}
+        <a href="/?offset={{ offset + limit }}&limit={{ limit }}{% if current_feed_id %}&feed_id={{ current_feed_id }}{% endif %}{% if current_has_analysis %}&has_analysis={{ current_has_analysis }}{% endif %}" class="btn btn-secondary">
+          Página Siguiente &rarr;
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

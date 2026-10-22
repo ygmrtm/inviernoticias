@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Administración de Fuentes RSS - Inviernoticias{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1 class="card-title">📡 Administración de Fuentes de Noticias (RSS)</h1>
+  <p style="color: var(--text-muted);">
+    Configura las fuentes RSS desde las cuales el sistema extrae automáticamente las noticias para monitoreo y análisis.
+  </p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem;">
+  <!-- Add New Feed Form -->
+  <div class="card">
+    <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">➕ Registrar Nueva Fuente RSS</h2>
+    <form action="/action/feeds/add" method="post">
+      <div class="form-group">
+        <label for="feed-name">Nombre del Medio o Portal:</label>
+        <input type="text" id="feed-name" name="name" placeholder="Ej. El Deforma, Aristegui Noticias" required>
+      </div>
+
+      <div class="form-group">
+        <label for="feed-url">URL del Feed RSS / XML:</label>
+        <input type="url" id="feed-url" name="url" placeholder="https://ejemplo.com/feed/" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%;">
+        💾 Guardar Fuente RSS
+      </button>
+    </form>
+  </div>
+
+  <!-- Synchronize Specific Feeds Form -->
+  <div class="card">
+    <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">🔄 Sincronización Personalizada</h2>
+    <form action="/action/sync" method="post">
+      <div class="form-group">
+        <label for="sync-feed">Fuente a Sincronizar:</label>
+        <select id="sync-feed" name="feed_id">
+          <option value="">-- Todas las fuentes configuradas --</option>
+          {% for f in feeds %}
+            <option value="{{ f.id }}">{{ f.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="sync-limit">Límite de Artículos a Importar:</label>
+        <input type="text" id="sync-limit" name="limit" value="25">
+      </div>
+
+      <button type="submit" class="btn btn-success" style="width: 100%;">
+        📥 Importar Artículos Ahora
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Existing Feeds List -->
+<div class="card">
+  <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">📋 Fuentes Activas en el Sistema ({{ feeds|length }})</h2>
+
+  {% if feeds|length == 0 %}
+    <p style="color: var(--text-muted); padding: 1rem 0;">No hay fuentes RSS registradas aún.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>URL del Feed</th>
+          <th>Registrado</th>
+          <th style="text-align: right;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for feed in feeds %}
+          <tr>
+            <td><strong>#{{ feed.id }}</strong></td>
+            <td><strong>{{ feed.name }}</strong></td>
+            <td>
+              <a href="{{ feed.url }}" target="_blank" rel="noopener noreferrer" style="color: var(--primary);">
+                {{ feed.url }}
+              </a>
+            </td>
+            <td style="color: var(--text-muted); font-size: 0.95rem;">
+              {{ feed.created_at[:10] if feed.created_at else '' }}
+            </td>
+            <td style="text-align: right;">
+              <form action="/action/feeds/delete/{{ feed.id }}" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return true;">
+                  🗑️ Eliminar
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}

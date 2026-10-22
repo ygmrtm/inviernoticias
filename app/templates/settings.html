@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración del Sistema - Inviernoticias{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1 class="card-title">⚙️ Configuración del Sistema & Modelos de Inteligencia Artificial</h1>
+  <p style="color: var(--text-muted);">
+    Administra el modelo de lenguaje de Google Gemini activo para el análisis cultural y satírico, así como los parámetros de ejecución periódica del CronJob y RabbitMQ.
+  </p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 2rem;">
+
+  <!-- Column 1: AI Model Selection -->
+  <div class="card">
+    <h2 style="font-size: 1.45rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+      🤖 Modelo de IA Predeterminado
+    </h2>
+    <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.5rem;">
+      Selecciona el modelo de Gemini que evaluará la sátira, sesgo político, dichos mexicanos y fuentes contrastadas.
+    </p>
+
+    <form action="/action/settings/model" method="post">
+      <div style="margin-bottom: 1.5rem;">
+        {% for m in models %}
+          <label class="model-option-card {% if m.is_current_default %}active-model{% endif %}" for="model-{{ m.id }}">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input 
+                  type="radio" 
+                  id="model-{{ m.id }}" 
+                  name="model" 
+                  value="{{ m.id }}" 
+                  {% if m.is_current_default %}checked{% endif %}
+                >
+                <strong style="font-size: 1.25rem; color: var(--text-main);">{{ m.name }}</strong>
+              </div>
+              <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                {% if m.recommended %}
+                  <span class="badge" style="background-color: rgba(251, 191, 36, 0.2); color: var(--gold); border: 1px solid var(--gold);">
+                    ⭐ Recomendado
+                  </span>
+                {% endif %}
+                {% if m.is_current_default %}
+                  <span class="badge badge-real">
+                    ✓ Activo
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+
+            <div style="margin-left: 2.2rem;">
+              <p style="font-size: 0.95rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.35rem;">
+                {{ m.tier }}
+              </p>
+              <p style="font-size: 1rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+                {{ m.description }}
+              </p>
+              <p style="font-size: 0.9rem; color: var(--text-muted);">
+                <strong>Capacidades:</strong> {{ m.strengths }}
+              </p>
+              {% if m.supports_grounding %}
+                <span style="display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; color: #6ee7b7;">
+                  🌐 Búsqueda Web Google (Search Grounding) Integrada
+                </span>
+              {% endif %}
+            </div>
+          </label>
+        {% endfor %}
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 1.2rem;">
+        💾 Guardar Modelo Predeterminado
+      </button>
+    </form>
+  </div>
+
+  <!-- Column 2: Scheduler / CronJob Configuration -->
+  <div>
+    <!-- Scheduler Status Box -->
+    <div class="card">
+      <h2 style="font-size: 1.45rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+        <span>⏰ Estado del Planificador (APScheduler)</span>
+        {% if scheduler_status.running and scheduler_status.has_active_job %}
+          <span class="status-pill status-pill-active">● En Ejecución</span>
+        {% else %}
+          <span class="status-pill status-pill-stopped">○ Detenido</span>
+        {% endif %}
+      </h2>
+
+      <div style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span style="color: var(--text-muted);">ID de Tarea:</span>
+          <strong>{{ scheduler_status.job_id or 'Ninguna tarea activa' }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span style="color: var(--text-muted);">Próxima Ejecución:</span>
+          <strong style="color: var(--gold);">
+            {{ scheduler_status.next_run_time or 'No programada' }}
+          </strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span style="color: var(--text-muted);">Intervalo Guardado:</span>
+          <strong>{{ scheduler_status.saved_config.interval_hours or '24' }} horas</strong>
+        </div>
+        {% if scheduler_status.saved_config.start_time %}
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Hora/Fecha Inicio:</span>
+            <strong>{{ scheduler_status.saved_config.start_time }}</strong>
+          </div>
+        {% endif %}
+      </div>
+
+      <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+        <form action="/action/settings/scheduler/stop" method="post" style="flex: 1;">
+          <button type="submit" class="btn btn-secondary" style="width: 100%;">
+            ⏹️ Detener Planificador
+          </button>
+        </form>
+
+        <form action="/action/cron/trigger" method="post" style="flex: 1;">
+          <button type="submit" class="btn btn-warning" style="width: 100%; background-color: var(--gold); color: #000;">
+            ⚡ Disparar Ingesta Ahora
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Configure Start Parameters Form -->
+    <div class="card">
+      <h2 style="font-size: 1.45rem; margin-bottom: 0.5rem;">
+        🕒 Programar Inicio del Planificador
+      </h2>
+      <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.25rem;">
+        Personaliza cuándo debe iniciar la primera ejecución y el intervalo de repetición.
+      </p>
+
+      <form action="/action/settings/scheduler" method="post">
+        <div class="form-group">
+          <label for="start_time">Hora o Fecha de Inicio (Cuándo empezar):</label>
+          <input 
+            type="text" 
+            id="start_time" 
+            name="start_time" 
+            placeholder="Ej: 03:00  ó  2026-10-23T04:00:00"
+            value="{{ scheduler_status.saved_config.start_time or '' }}"
+          >
+          <small style="color: var(--text-muted); display: block; margin-top: 0.35rem; font-size: 0.95rem;">
+            Acepta formato de hora <code>HH:MM</code> (ej. <code>02:00</code> para la próxima madrugada) o formato ISO completo.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="interval_hours">Intervalo de Recurrencia (Horas):</label>
+          <input 
+            type="number" 
+            id="interval_hours" 
+            name="interval_hours" 
+            min="1" 
+            max="168"
+            value="{{ scheduler_status.saved_config.interval_hours or 24 }}"
+          >
+          <small style="color: var(--text-muted); display: block; margin-top: 0.35rem; font-size: 0.95rem;">
+            Por defecto: 24 horas (ciclo diario).
+          </small>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label for="hour">Hora Diaria Fija (0-23):</label>
+            <input 
+              type="number" 
+              id="hour" 
+              name="hour" 
+              min="0" 
+              max="23" 
+              placeholder="Opcional (ej. 3)"
+              value="{{ scheduler_status.saved_config.hour or '' }}"
+            >
+          </div>
+          <div class="form-group">
+            <label for="minute">Minuto (0-59):</label>
+            <input 
+              type="number" 
+              id="minute" 
+              name="minute" 
+              min="0" 
+              max="59" 
+              placeholder="Opcional (ej. 0)"
+              value="{{ scheduler_status.saved_config.minute or '' }}"
+            >
+          </div>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+          <input 
+            type="checkbox" 
+            id="start_immediately" 
+            name="start_immediately" 
+            value="true"
+            style="width: 22px; height: 22px; accent-color: var(--gold);"
+          >
+          <label for="start_immediately" style="margin-bottom: 0; cursor: pointer; font-size: 1.05rem;">
+            Ejecutar un ciclo de sincronización inmediatamente al guardar
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-success" style="width: 100%; font-size: 1.2rem; margin-top: 1rem;">
+          ▶️ Iniciar / Actualizar Planificador
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
