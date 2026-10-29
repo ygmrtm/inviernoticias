@@ -35,7 +35,6 @@ fi
 echo "=========================================================="
 echo "❄️  Iniciando Inviernoticias .mx (Python + FastAPI SSR)"
 echo "📡  Servidor escuchando en: http://localhost:$PORT"
-echo "🌐  Cero JavaScript en el cliente • Accesible para todos"
 echo "=========================================================="
 
 exec "$UVICORN_BIN" app.main:app --host "$HOST" --port "$PORT" --reload

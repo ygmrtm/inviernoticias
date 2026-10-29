@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import json
+import time
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
@@ -238,5 +239,74 @@ def get_all_settings() -> Dict[str, str]:
         cursor.execute("SELECT key, value FROM settings;")
         rows = cursor.fetchall()
         return {row["key"]: row["value"] for row in rows}
+    finally:
+        conn.close()
+
+# ==========================================
+# LIGHTWEIGHT SQL EXECUTION CONSOLE
+# ==========================================
+
+def execute_sql_query(query_str: str) -> Dict[str, Any]:
+    """
+    Executes an arbitrary SQL query against the internal SQLite database.
+    Returns structured results for queries (SELECT/PRAGMA/EXPLAIN/WITH),
+    or rowsAffected/mutation message for INSERT/UPDATE/DELETE/DDL.
+    """
+    clean = (query_str or "").strip()
+    if not clean:
+        return {
+            "type": "error",
+            "query": query_str,
+            "error": "La instrucción SQL no puede estar vacía.",
+            "executionTimeMs": 0.0
+        }
+
+    start = time.perf_counter()
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        stmt = clean.rstrip(";").strip()
+        first_word = stmt.split()[0].upper() if stmt.split() else ""
+
+        if first_word in ("SELECT", "PRAGMA", "EXPLAIN", "WITH"):
+            cursor.execute(clean)
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            raw_rows = cursor.fetchall()
+            rows_as_dict = [dict(r) for r in raw_rows]
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            return {
+                "type": "query",
+                "query": clean,
+                "columns": columns,
+                "rows": rows_as_dict,
+                "rowCount": len(rows_as_dict),
+                "executionTimeMs": duration_ms,
+                "error": None
+            }
+        else:
+            if ";" in stmt:
+                cursor.executescript(clean)
+                rows_affected = cursor.rowcount
+            else:
+                cursor.execute(clean)
+                rows_affected = cursor.rowcount
+            conn.commit()
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            return {
+                "type": "mutation",
+                "query": clean,
+                "rowsAffected": rows_affected,
+                "message": f"Instrucción SQL ejecutada con éxito. Filas afectadas: {rows_affected}",
+                "executionTimeMs": duration_ms,
+                "error": None
+            }
+    except Exception as e:
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        return {
+            "type": "error",
+            "query": clean,
+            "error": str(e),
+            "executionTimeMs": duration_ms
+        }
     finally:
         conn.close()

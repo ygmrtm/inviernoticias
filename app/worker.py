@@ -65,6 +65,18 @@ class WorkerService:
                         ch.basic_ack(delivery_tag=method.delivery_tag)
                         logger.info(f"Article ID {article_id} processed & forwarded to Notion queue with type='{article_type}'.")
 
+                    except gemini.AllTokensQuotaExceededError as quota_err:
+                        logger.error(
+                            f"[Analyzer Worker] Cuota de Gemini agotada en todas las cuentas (principal y respaldo) "
+                            f"para el artículo ID {article_id}. Despachando a DLX para reprocesamiento posterior: {quota_err}"
+                        )
+                        rabbitmq.handle_consumer_failure(
+                            channel=ch,
+                            method=method,
+                            properties=properties,
+                            body_bytes=body,
+                            error_message=f"QUOTA_EXHAUSTED: {quota_err}"
+                        )
                     except Exception as e:
                         logger.error(f"Error processing Analyze Request: {e}", exc_info=True)
                         rabbitmq.handle_consumer_failure(ch, method, properties, body, str(e))

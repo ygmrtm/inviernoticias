@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, Query, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,10 +62,13 @@ async def lifespan(app: FastAPI):
     worker.worker_service.stop_all()
     scheduler.stop_scheduler()
 
+APP_VERSION = os.getenv("APP_VERSION", "2.1.0")
+APP_RELEASE = os.getenv("APP_RELEASE", "2026.10.29")
+
 app = FastAPI(
     title="Inviernoticias API",
     description="Detector de Sátira, Sesgo y Noticias Falsas en México con IA",
-    version="2.0.0",
+    version=APP_VERSION,
     lifespan=lifespan
 )
 
@@ -80,6 +83,13 @@ app.add_middleware(
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    favicon_ico = BASE_DIR / "static" / "favicon.ico"
+    if favicon_ico.exists():
+        return FileResponse(str(favicon_ico), media_type="image/x-icon")
+    return FileResponse(str(BASE_DIR / "static" / "favicon.svg"), media_type="image/svg+xml")
 
 # ==========================================
 # PYDANTIC SCHEMAS FOR REST API
@@ -111,6 +121,13 @@ class SchedulerStartPayload(BaseModel):
     hour: Optional[int] = None
     minute: Optional[int] = None
     startImmediately: Optional[bool] = False
+
+class SqlExecutePayload(BaseModel):
+    query: str
+
+class TokenUpdatePayload(BaseModel):
+    primaryKey: Optional[str] = None
+    backupKey: Optional[str] = None
 
 # ==========================================
 # SERVER-SIDE RENDERED (SSR) HTML VIEWS
@@ -232,10 +249,21 @@ async def view_article_detail(request: Request, article_id: int, msg: Optional[s
     )
 
 @app.get("/settings", response_class=HTMLResponse)
-async def view_settings(request: Request, msg: Optional[str] = None, err: Optional[str] = None):
+async def view_settings(
+    request: Request,
+    sql: Optional[str] = None,
+    msg: Optional[str] = None,
+    err: Optional[str] = None
+):
     models = gemini.get_available_models()
     scheduler_status = scheduler.get_scheduler_status()
+    tokens_status = gemini.get_tokens_status()
     feeds = db.get_feeds()
+    
+    sql_result = None
+    if sql and sql.strip():
+        sql_result = db.execute_sql_query(sql.strip())
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
@@ -243,6 +271,9 @@ async def view_settings(request: Request, msg: Optional[str] = None, err: Option
             "active_tab": "settings",
             "models": models,
             "scheduler_status": scheduler_status,
+            "tokens_status": tokens_status,
+            "sql_result": sql_result,
+            "last_sql": sql or "SELECT id, title, link, created_at FROM articles LIMIT 5;",
             "feeds": feeds,
             "message": msg,
             "error": err
@@ -371,6 +402,73 @@ async def action_settings_scheduler_stop():
         logger.error(f"Error stopping scheduler: {e}")
         return RedirectResponse(url=f"/settings?err=Error+al+detener+scheduler:+{e}", status_code=status.HTTP_303_SEE_OTHER)
 
+@app.post("/action/settings/sql", response_class=HTMLResponse)
+async def action_settings_sql(
+    request: Request,
+    sql_query: str = Form(...)
+):
+    models = gemini.get_available_models()
+    scheduler_status = scheduler.get_scheduler_status()
+    tokens_status = gemini.get_tokens_status()
+    feeds = db.get_feeds()
+
+    sql_result = db.execute_sql_query(sql_query)
+
+    msg = "Consulta SQL ejecutada correctamente." if sql_result.get("type") != "error" else None
+    err = f"Error SQL: {sql_result.get('error')}" if sql_result.get("type") == "error" else None
+
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={
+            "active_tab": "settings",
+            "models": models,
+            "scheduler_status": scheduler_status,
+            "tokens_status": tokens_status,
+            "sql_result": sql_result,
+            "last_sql": sql_query,
+            "feeds": feeds,
+            "message": msg,
+            "error": err
+        }
+    )
+
+@app.post("/action/settings/tokens")
+async def action_settings_tokens(
+    primary_key: Optional[str] = Form(None),
+    backup_key: Optional[str] = Form(None)
+):
+    try:
+        gemini.set_tokens(
+            primary_key=primary_key.strip() if primary_key and primary_key.strip() else None,
+            backup_key=backup_key.strip() if backup_key and backup_key.strip() else None
+        )
+        return RedirectResponse(
+            url="/settings?msg=Tokens+de+Gemini+actualizados+exitosamente",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+    except Exception as e:
+        logger.error(f"Error saving tokens: {e}")
+        return RedirectResponse(
+            url=f"/settings?err=Error+al+guardar+tokens:+{e}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+@app.post("/action/settings/tokens/reset")
+async def action_settings_tokens_reset():
+    try:
+        gemini.reset_quota_status()
+        return RedirectResponse(
+            url="/settings?msg=Estado+de+cuotas+reiniciado.+Token+principal+reactivado.",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+    except Exception as e:
+        logger.error(f"Error resetting token quota: {e}")
+        return RedirectResponse(
+            url=f"/settings?err=Error+al+reiniciar+cuota:+{e}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
 # ==========================================
 # REST API ENDPOINTS (100% POSTMAN COMPATIBLE)
 # ==========================================
@@ -380,6 +478,8 @@ async def api_health():
     return {
         "status": "ok",
         "service": "Inviernoticias API (Python/FastAPI)",
+        "version": APP_VERSION,
+        "release": APP_RELEASE,
         "framework": "FastAPI + Jinja2 SSR",
         "javascript_free": True
     }
@@ -454,6 +554,8 @@ async def api_analyze_direct(payload: DirectAnalyzePayload):
     try:
         result = gemini.analyze_content(title=payload.title or "Texto directo", content=payload.text)
         return result
+    except gemini.AllTokensQuotaExceededError as qe:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(qe))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred during direct text analysis: {e}")
 
@@ -467,6 +569,8 @@ async def api_analyze_article(article_id: int):
         result = gemini.analyze_content(title=article["title"], content=article["content"] or "")
         db.update_article_analysis(article_id, result)
         return result
+    except gemini.AllTokensQuotaExceededError as qe:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(qe))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred during analysis: {e}")
 
@@ -584,3 +688,59 @@ async def api_scheduler_status():
     Returns the current execution state, active job, next run time, and saved configuration of the scheduler.
     """
     return scheduler.get_scheduler_status()
+
+# ==========================================
+# SQL CONSOLE & DATABASE ADMINISTRATION
+# ==========================================
+
+@app.post("/api/sql/execute")
+async def api_sql_execute(payload: SqlExecutePayload):
+    """
+    Executes an arbitrary SQL statement against the internal SQLite database.
+    Supports SELECT, PRAGMA, EXPLAIN, WITH, INSERT, UPDATE, DELETE, DDL.
+    """
+    if not payload.query or not payload.query.strip():
+        raise HTTPException(status_code=400, detail="SQL query string cannot be empty.")
+    result = db.execute_sql_query(payload.query)
+    if result.get("type") == "error":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+# ==========================================
+# GEMINI API TOKENS & QUOTA MANAGEMENT
+# ==========================================
+
+@app.get("/api/tokens/status")
+async def api_tokens_status():
+    """
+    Returns the configuration and quota health status of primary and backup Gemini API tokens.
+    """
+    return gemini.get_tokens_status()
+
+@app.post("/api/tokens")
+async def api_set_tokens(payload: TokenUpdatePayload):
+    """
+    Configures and persists the primary and/or backup Gemini API tokens.
+    """
+    try:
+        gemini.set_tokens(primary_key=payload.primaryKey, backup_key=payload.backupKey)
+        return {
+            "message": "Tokens de Gemini actualizados exitosamente.",
+            "status": gemini.get_tokens_status()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al actualizar tokens de Gemini: {e}")
+
+@app.post("/api/tokens/reset-quota")
+async def api_reset_tokens_quota():
+    """
+    Resets quota-exhausted flags and restores primary token as the active analyzer.
+    """
+    try:
+        gemini.reset_quota_status()
+        return {
+            "message": "Estado de cuotas reiniciado. Token principal reactivado.",
+            "status": gemini.get_tokens_status()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al reiniciar estado de cuota: {e}")

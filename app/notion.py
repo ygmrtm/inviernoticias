@@ -1,18 +1,45 @@
 import os
+import re
 import requests
 import logging
 from typing import Dict, Any
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
 NOTION_API_URL = "https://api.notion.com/v1/pages"
 
-def publish_to_notion(article: Dict[str, Any], analysis: Dict[str, Any]) -> str:
-    token = os.getenv("NOTION_TOKEN")
-    database_id = os.getenv("NOTION_DATABASE_ID")
+def clean_database_id(raw_id: str) -> str:
+    """Cleans and standardizes Notion database ID to a standard 32-character UUID."""
+    if not raw_id:
+        return ""
+    cleaned = raw_id.strip()
+    # If a Notion URL was provided, extract the path segment
+    if "notion.so" in cleaned:
+        cleaned = cleaned.split("?")[0].rstrip("/").split("/")[-1]
+    
+    # Strip any existing dashes or quotes
+    hex_only = cleaned.replace("-", "").replace('"', '').replace("'", "")
+    
+    if len(hex_only) != 32:
+        raise ValueError(
+            f"NOTION_DATABASE_ID inválido: '{raw_id}'. "
+            f"El ID debe tener exactamente 32 caracteres hexadecimales (tiene {len(hex_only)}). "
+            "Verifica tu archivo .env ya que puede faltar algún dígito al copiarlo."
+        )
+    
+    # Return formatted UUID: 8-4-4-4-12
+    return f"{hex_only[:8]}-{hex_only[8:12]}-{hex_only[12:16]}-{hex_only[16:20]}-{hex_only[20:]}"
 
-    if not token or not database_id:
+def publish_to_notion(article: Dict[str, Any], analysis: Dict[str, Any]) -> str:
+    load_dotenv(override=True)
+    token = os.getenv("NOTION_TOKEN")
+    raw_database_id = os.getenv("NOTION_DATABASE_ID")
+
+    if not token or not raw_database_id:
         raise ValueError("Notion configuration is missing. Please set NOTION_TOKEN and NOTION_DATABASE_ID in your environment.")
+
+    database_id = clean_database_id(raw_database_id)
 
     title = article.get("title") or "Noticia sin título"
     link = article.get("link") or "http://localhost"
@@ -25,6 +52,7 @@ def publish_to_notion(article: Dict[str, Any], analysis: Dict[str, Any]) -> str:
     refran = analysis.get("refran", "N/A")
     summary = analysis.get("analysisSummary", "")
     foreigner_exp = analysis.get("foreignerExplanation", "")
+    news_summary = analysis.get("newsSummary", "")
     cultural_ref = analysis.get("mexicanCultureReferences", "")
     hist_quote = analysis.get("historicalQuote", "")
     related_sources = analysis.get("relatedSources", [])
@@ -69,6 +97,20 @@ def publish_to_notion(article: Dict[str, Any], analysis: Dict[str, Any]) -> str:
             "object": "block",
             "type": "heading_2",
             "heading_2": {
+                "rich_text": [{"type": "text", "text": {"content": "Resumen de la Noticia"}}]
+            }
+        },
+        {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [{"type": "text", "text": {"content": (news_summary or "Sin resumen disponible.")[:2000]}}]
+            }
+        },
+        {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {
                 "rich_text": [{"type": "text", "text": {"content": "Resumen del Análisis"}}]
             }
         },
@@ -78,7 +120,7 @@ def publish_to_notion(article: Dict[str, Any], analysis: Dict[str, Any]) -> str:
             "paragraph": {
                 "rich_text": [{"type": "text", "text": {"content": (summary or "Sin resumen disponible.")[:2000]}}]
             }
-        },
+        },        
         {
             "object": "block",
             "type": "heading_2",
@@ -139,6 +181,7 @@ def publish_to_notion(article: Dict[str, Any], analysis: Dict[str, Any]) -> str:
 
     payload = {
         "parent": {"database_id": database_id},
+        "icon" : { "emoji" : "📰" if is_satire else "🗞️" },
         "properties": properties,
         "children": children
     }

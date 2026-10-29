@@ -214,4 +214,198 @@
   </div>
 
 </div>
+
+<!-- Row 2: API Tokens & Quota Management (Primary & Backup Fallback) -->
+<div class="card" style="margin-top: 2rem;">
+  <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+    <span>🔑 Gestión de Tokens de API de Gemini (Principal & Respaldo)</span>
+    <form action="/action/settings/tokens/reset" method="post" style="display: inline;">
+      <button type="submit" class="btn btn-sm btn-secondary" title="Restablece las banderas de cuota y vuelve a probar el token principal">
+        🔄 Reiniciar Estado de Cuotas
+      </button>
+    </form>
+  </h2>
+
+  <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.5rem;">
+    Configura tu token principal de Google Gemini y una cuenta alternativa de respaldo. Si la cuenta principal supera su cuota de uso (<strong>Error 429 / RESOURCE_EXHAUSTED</strong>), el sistema conmutará automáticamente al token de respaldo. Si ambas cuentas agotan su cuota, la tarea de análisis será enviada a la <strong>cola DLX de RabbitMQ</strong> para reintentar más tarde.
+  </p>
+
+  <!-- Tokens Diagnostics Status Grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+    <!-- Primary Token Card -->
+    <div class="token-card" style="border-left: 5px solid {% if tokens_status.primary_quota_exceeded %}var(--danger){% elif tokens_status.primary_configured %}var(--success){% else %}var(--border-color){% endif %};">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <strong style="font-size: 1.2rem; color: var(--text-main);">Token Principal</strong>
+        <div style="display: flex; gap: 0.4rem;">
+          {% if tokens_status.active_token_type == 'primary' and not tokens_status.primary_quota_exceeded %}
+            <span class="badge badge-real">⭐ Activo</span>
+          {% endif %}
+          {% if tokens_status.primary_quota_exceeded %}
+            <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
+              ⚠️ Cuota Agotada (429)
+            </span>
+          {% elif tokens_status.primary_configured %}
+            <span class="badge badge-real">✓ Disponible</span>
+          {% else %}
+            <span class="badge" style="background-color: #334155; color: #94a3b8;">No configurado</span>
+          {% endif %}
+        </div>
+      </div>
+      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+        Credencial: <code>{{ tokens_status.primary_masked or 'No establecida' }}</code>
+      </p>
+      <small style="color: #64748b;">Variable de entorno: <code>GEMINI_API_KEY</code> o configuración en SQLite.</small>
+    </div>
+
+    <!-- Backup Token Card -->
+    <div class="token-card" style="border-left: 5px solid {% if tokens_status.backup_quota_exceeded %}var(--danger){% elif tokens_status.backup_configured %}#38bdf8{% else %}var(--border-color){% endif %};">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <strong style="font-size: 1.2rem; color: var(--text-main);">Token de Respaldo (Fallback)</strong>
+        <div style="display: flex; gap: 0.4rem;">
+          {% if tokens_status.active_token_type == 'backup' and not tokens_status.backup_quota_exceeded %}
+            <span class="badge" style="background-color: rgba(56, 189, 248, 0.25); color: #38bdf8; border: 1px solid #38bdf8;">
+              🔄 Activo en Fallback
+            </span>
+          {% endif %}
+          {% if tokens_status.backup_quota_exceeded %}
+            <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
+              ⚠️ Cuota Agotada (429)
+            </span>
+          {% elif tokens_status.backup_configured %}
+            <span class="badge badge-real">✓ Listo</span>
+          {% else %}
+            <span class="badge" style="background-color: #334155; color: #94a3b8;">No configurado</span>
+          {% endif %}
+        </div>
+      </div>
+      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.25rem;">
+        Credencial: <code>{{ tokens_status.backup_masked or 'No establecida' }}</code>
+      </p>
+      <small style="color: #64748b;">Variable de entorno: <code>GEMINI_BACKUP_API_KEY</code> o configuración en SQLite.</small>
+    </div>
+  </div>
+
+  <!-- Form to Update Tokens -->
+  <form action="/action/settings/tokens" method="post">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.25rem;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="primary_key">Clave de API Principal (GEMINI_API_KEY):</label>
+        <input 
+          type="text" 
+          id="primary_key" 
+          name="primary_key" 
+          placeholder="Dejar vacío para conservar actual"
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="backup_key">Clave de API de Respaldo (GEMINI_BACKUP_API_KEY):</label>
+        <input 
+          type="text" 
+          id="backup_key" 
+          name="backup_key" 
+          placeholder="Ingresa token secundario de Gemini"
+          autocomplete="off"
+        >
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="font-size: 1.15rem;">
+      💾 Guardar Credenciales de API
+    </button>
+  </form>
+</div>
+
+<!-- Row 3: Lightweight SQLite SQL Console -->
+<div class="card" style="margin-top: 2rem;">
+  <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+    💻 Consola SQL Interna (SQLite: <code>inviernoticias.db</code>)
+  </h2>
+  <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1rem;">
+    Ejecuta consultas de lectura (<code>SELECT</code>, <code>PRAGMA</code>) o comandos de modificación (<code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>) directamente sobre la base de datos interna.
+  </p>
+
+  <!-- Quick Query Chips -->
+  <div style="margin-bottom: 0.5rem;">
+    <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
+      Consultas de ejemplo rápido:
+    </span>
+    <div class="chip-list">
+      <a href="/settings?sql=SELECT+*+FROM+feeds;" class="chip">SELECT * FROM feeds;</a>
+      <a href="/settings?sql=SELECT+id,+title,+link,+created_at+FROM+articles+LIMIT+5;" class="chip">SELECT articles (5);</a>
+      <a href="/settings?sql=SELECT+key,+value,+updated_at+FROM+settings;" class="chip">SELECT * FROM settings;</a>
+      <a href="/settings?sql=SELECT+COUNT(*)+AS+total_articulos+FROM+articles;" class="chip">COUNT(articles);</a>
+      <a href="/settings?sql=PRAGMA+table_info(articles);" class="chip">PRAGMA table_info(articles);</a>
+      <a href="/settings?sql=PRAGMA+table_info(settings);" class="chip">PRAGMA table_info(settings);</a>
+    </div>
+  </div>
+
+  <!-- SQL Form -->
+  <form action="/action/settings/sql" method="post">
+    <div class="form-group">
+      <label for="sql_query">Instrucción SQL a Ejecutar:</label>
+      <textarea 
+        id="sql_query" 
+        name="sql_query" 
+        class="sql-editor" 
+        rows="4" 
+        placeholder="Escribe tu comando SQL aquí... Ej: SELECT * FROM articles WHERE is_satire = 1;"
+        required
+      >{{ last_sql or '' }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-success" style="font-size: 1.15rem;">
+      ▶️ Ejecutar Consulta SQL
+    </button>
+  </form>
+
+  <!-- Query Results Section -->
+  {% if sql_result %}
+    <div style="margin-top: 1.5rem;">
+      {% if sql_result.type == 'query' %}
+        <div class="alert alert-info" style="margin-bottom: 0.75rem;">
+          ✓ Consulta ejecutada exitosamente: <strong>{{ sql_result.rowCount }}</strong> fila(s) devuelta(s) en <strong>{{ sql_result.executionTimeMs }} ms</strong>.
+        </div>
+
+        {% if sql_result.rowCount > 0 %}
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  {% for col in sql_result.columns %}
+                    <th>{{ col }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in sql_result.rows %}
+                  <tr>
+                    {% for col in sql_result.columns %}
+                      <td style="max-width: 380px; overflow: hidden; text-overflow: ellipsis;">
+                        {{ row[col] if row[col] is not none else 'NULL' }}
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p style="color: var(--text-muted); padding: 1rem 0;">La consulta no devolvió filas.</p>
+        {% endif %}
+
+      {% elif sql_result.type == 'mutation' %}
+        <div class="alert alert-success">
+          ✓ {{ sql_result.message }} (Tiempo de ejecución: {{ sql_result.executionTimeMs }} ms).
+        </div>
+
+      {% elif sql_result.type == 'error' %}
+        <div class="alert alert-error">
+          ⚠️ {{ sql_result.error }} (Tiempo de respuesta: {{ sql_result.executionTimeMs }} ms).
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
 {% endblock %}

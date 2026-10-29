@@ -61,6 +61,8 @@
 									"pm.test(\"Service status is ok\", function () {",
 									"    var jsonData = pm.response.json();",
 									"    pm.expect(jsonData.status).to.eql(\"ok\");",
+									"    pm.expect(jsonData).to.have.property(\"version\");",
+									"    pm.expect(jsonData).to.have.property(\"release\");",
 									"});"
 								],
 								"type": "text/javascript"
@@ -798,6 +800,145 @@
 							}
 						}
 					]
+				},
+				{
+					"name": "Get Gemini Tokens Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/tokens/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tokens",
+								"status"
+							]
+						},
+						"description": "Consulta el estado de configuración y salud de cuota de los tokens principal y de respaldo (fallback) de Google Gemini."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Tokens status properties verified\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"primary_configured\");",
+									"    pm.expect(jsonData).to.have.property(\"backup_configured\");",
+									"    pm.expect(jsonData).to.have.property(\"active_token_type\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Update Gemini Tokens",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"primaryKey\": \"\",\n  \"backupKey\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tokens",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tokens"
+							]
+						},
+						"description": "Actualiza y persiste en SQLite los tokens principal y/o secundario de respaldo para Google Gemini."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Tokens updated successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property(\"status\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Reset Token Quota Status",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/tokens/reset-quota",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tokens",
+								"reset-quota"
+							]
+						},
+						"description": "Reinicia los indicadores de cuota agotada de ambos tokens y restaura el token principal como activo predeterminado."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Quota reset confirmed\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status.primary_quota_exceeded).to.eql(false);",
+									"    pm.expect(jsonData.status.active_token_type).to.eql(\"primary\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
 				}
 			],
 			"description": "Endpoints de inferencia y evaluación con Inteligencia Artificial utilizando Google Gemini."
@@ -1184,6 +1325,171 @@
 				}
 			],
 			"description": "Control y monitoreo del flujo asíncrono dirigido por eventos: CronJob de 24 horas, colas de RabbitMQ y DLX."
+		},
+		{
+			"name": "08. Database & SQL Console",
+			"item": [
+				{
+					"name": "Execute SQL Query (SELECT)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"query\": \"SELECT id, title, is_satire, created_at FROM articles LIMIT 5;\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sql/execute",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sql",
+								"execute"
+							]
+						},
+						"description": "Ejecuta una consulta SQL de lectura (SELECT) directamente contra la base de datos interna SQLite y devuelve columnas, filas y métricas de ejecución."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Query response structure\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.type).to.eql(\"query\");",
+									"    pm.expect(jsonData).to.have.property(\"columns\");",
+									"    pm.expect(jsonData).to.have.property(\"rows\");",
+									"    pm.expect(jsonData).to.have.property(\"rowCount\");",
+									"    pm.expect(jsonData).to.have.property(\"executionTimeMs\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Execute SQL Query (PRAGMA)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"query\": \"PRAGMA table_info(settings);\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sql/execute",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sql",
+								"execute"
+							]
+						},
+						"description": "Ejecuta una instrucción PRAGMA para inspeccionar la estructura y esquema de tablas en SQLite."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"PRAGMA response structure\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.type).to.eql(\"query\");",
+									"    pm.expect(jsonData.columns).to.include(\"name\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Execute SQL Statement (Mutation)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"query\": \"INSERT OR REPLACE INTO settings (key, value) VALUES ('last_ping', 'test_postman');\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sql/execute",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sql",
+								"execute"
+							]
+						},
+						"description": "Ejecuta una instrucción DML/DDL (INSERT, UPDATE, DELETE) y retorna las filas afectadas."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Mutation response structure\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.type).to.eql(\"mutation\");",
+									"    pm.expect(jsonData).to.have.property(\"rowsAffected\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			],
+			"description": "Consola SQL ligera para administración e inspección directa de la base de datos SQLite (inviernoticias.db)."
 		}
 	]
 }

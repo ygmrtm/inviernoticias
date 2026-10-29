@@ -10,6 +10,18 @@ from . import db
 
 logger = logging.getLogger(__name__)
 
+# ==========================================
+# CUSTOM EXCEPTIONS FOR QUOTA MANAGEMENT
+# ==========================================
+
+class GeminiQuotaExceededError(Exception):
+    """Raised when a Gemini API key has exceeded quota limits (HTTP 429 / RESOURCE_EXHAUSTED)."""
+    pass
+
+class AllTokensQuotaExceededError(GeminiQuotaExceededError):
+    """Raised when both primary and backup Gemini API keys have exceeded quota limits."""
+    pass
+
 # Curated list of suitable Gemini models for satire detection, cultural context, and search grounding
 SUITABLE_MODELS = [
     {
@@ -110,11 +122,99 @@ def get_available_models() -> List[Dict[str, Any]]:
         result.append(item)
     return result
 
-def get_genai_client() -> genai.Client:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY no está configurada en las variables de entorno.")
-    return genai.Client(api_key=api_key)
+# ==========================================
+# TOKEN MANAGEMENT & QUOTA FALLBACK
+# ==========================================
+
+def get_primary_api_key() -> Optional[str]:
+    try:
+        configured = db.get_setting("gemini_api_key")
+        if configured:
+            return configured.strip()
+    except Exception:
+        pass
+    return (os.getenv("GEMINI_API_KEY") or "").strip() or None
+
+def get_backup_api_key() -> Optional[str]:
+    try:
+        configured = db.get_setting("gemini_backup_api_key")
+        if configured:
+            return configured.strip()
+    except Exception:
+        pass
+    return (
+        os.getenv("GEMINI_BACKUP_API_KEY") 
+        or os.getenv("GEMINI_API_KEY_BACKUP") 
+        or ""
+    ).strip() or None
+
+def set_tokens(primary_key: Optional[str] = None, backup_key: Optional[str] = None):
+    if primary_key is not None and primary_key.strip():
+        db.set_setting("gemini_api_key", primary_key.strip())
+        db.set_setting("gemini_primary_quota_exceeded", "false")
+        logger.info("Primary GEMINI_API_KEY updated in database settings.")
+    if backup_key is not None:
+        db.set_setting("gemini_backup_api_key", backup_key.strip())
+        db.set_setting("gemini_backup_quota_exceeded", "false")
+        logger.info("Backup GEMINI_BACKUP_API_KEY updated in database settings.")
+
+def reset_quota_status():
+    db.set_setting("gemini_primary_quota_exceeded", "false")
+    db.set_setting("gemini_backup_quota_exceeded", "false")
+    db.set_setting("gemini_active_token_type", "primary")
+    logger.info("Quota status reset: both tokens marked available, active set to primary.")
+
+def mask_key(key: Optional[str]) -> str:
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return "****"
+    return f"{key[:6]}...{key[-4:]}"
+
+def get_tokens_status() -> Dict[str, Any]:
+    primary = get_primary_api_key()
+    backup = get_backup_api_key()
+    
+    p_exceeded = db.get_setting("gemini_primary_quota_exceeded", "false") == "true"
+    b_exceeded = db.get_setting("gemini_backup_quota_exceeded", "false") == "true"
+
+    if p_exceeded and backup and not b_exceeded:
+        active = "backup"
+    elif not p_exceeded and primary:
+        active = "primary"
+    else:
+        active = db.get_setting("gemini_active_token_type", "primary")
+
+    return {
+        "primary_configured": bool(primary),
+        "primary_masked": mask_key(primary),
+        "backup_configured": bool(backup),
+        "backup_masked": mask_key(backup),
+        "active_token_type": active,
+        "primary_quota_exceeded": p_exceeded,
+        "backup_quota_exceeded": b_exceeded,
+        "all_quotas_exceeded": bool(p_exceeded and (b_exceeded or not backup))
+    }
+
+def is_quota_exceeded_error(err: Exception) -> bool:
+    err_str = str(err).lower()
+    err_code = getattr(err, "code", None) or getattr(err, "status_code", None)
+    if err_code in (429, "429"):
+        return True
+    if (
+        "429" in err_str 
+        or "resource_exhausted" in err_str 
+        or "quota exceeded" in err_str 
+        or "rate limit" in err_str
+    ):
+        return True
+    return False
+
+def get_genai_client(api_key: Optional[str] = None) -> genai.Client:
+    key = api_key or get_primary_api_key() or get_backup_api_key()
+    if not key:
+        raise ValueError("GEMINI_API_KEY no está configurada en settings ni en variables de entorno.")
+    return genai.Client(api_key=key)
 
 def analyze_content(title: str, content: str, model: Optional[str] = None) -> Dict[str, Any]:
     active_model = model or get_selected_model()
@@ -131,7 +231,8 @@ You must evaluate:
 5. A relevant quote from a prominent historical or important figure in Mexican history (e.g., Benito Juárez, Octavio Paz, Cantinflas, Sor Juana, Jose Vasconcelos, etc.) ONLY if it fits, otherwise null.
 6. A breakdown explanation for a foreigner ("foreignerExplanation") so they can understand the joke, cultural context, or slang without needing to be Mexican.
 7. Any specific reference to Mexican culture, society, slang, or current events.
-8. Contrast sources: use search grounding to verify the facts and suggest related real-news articles to contrast or check.
+8. Provide a news summary "newsSummary" about the real news.
+9. Contrast sources: use search grounding to verify the facts and suggest related real-news articles to contrast or check.
 
 Provide the output in valid JSON format with exactly the following structure:
 {{
@@ -142,6 +243,7 @@ Provide the output in valid JSON format with exactly the following structure:
   "refran": "<Mexican refrán / saying>",
   "historicalQuote": "<Quote from historical figure or null>",
   "foreignerExplanation": "<Explanation for a foreigner>",
+  "newsSummary": "<News summary>",
   "mexicanCultureReferences": "<Specific cultural references found>",
   "analysisSummary": "<A short, clear paragraph explaining your overall findings>",
   "relatedSources": [
@@ -159,32 +261,95 @@ Article Description/Content:
 "{content or ''}"
     """
 
-    client = get_genai_client()
+    primary_key = get_primary_api_key()
+    backup_key = get_backup_api_key()
 
-    try:
-        logger.info(f"Analyzing content using model='{active_model}' with Gemini Search Grounding: '{title}'")
-        response = client.models.generate_content(
-            model=active_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[{"google_search": {}}]
-            )
-        )
-    except Exception as search_err:
-        logger.warning(f"Fallback to standard Gemini without search grounding on model '{active_model}': {search_err}")
-        response = client.models.generate_content(
-            model=active_model,
-            contents=prompt
+    if not primary_key and not backup_key:
+        raise ValueError("No hay ninguna clave GEMINI_API_KEY configurada.")
+
+    primary_exceeded = db.get_setting("gemini_primary_quota_exceeded", "false") == "true"
+    backup_exceeded = db.get_setting("gemini_backup_quota_exceeded", "false") == "true"
+
+    tokens_to_try = []
+    if primary_key and not primary_exceeded:
+        tokens_to_try.append(("primary", primary_key))
+    if backup_key and not backup_exceeded:
+        tokens_to_try.append(("backup", backup_key))
+    if not tokens_to_try:
+        # If both flagged exceeded, retry both in case quota has reset
+        if primary_key:
+            tokens_to_try.append(("primary", primary_key))
+        if backup_key:
+            tokens_to_try.append(("backup", backup_key))
+
+    response = None
+    token_used_type = None
+
+    for token_type, key in tokens_to_try:
+        try:
+            logger.info(f"Analyzing content using {token_type.upper()} Gemini token on model='{active_model}': '{title}'")
+            client = genai.Client(api_key=key)
+
+            try:
+                response = client.models.generate_content(
+                    model=active_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        tools=[{"google_search": {}}]
+                    )
+                )
+            except Exception as search_err:
+                if is_quota_exceeded_error(search_err):
+                    raise search_err
+                logger.warning(f"Fallback to standard Gemini without search grounding on model '{active_model}': {search_err}")
+                response = client.models.generate_content(
+                    model=active_model,
+                    contents=prompt
+                )
+
+            token_used_type = token_type
+            if token_type == "primary":
+                db.set_setting("gemini_primary_quota_exceeded", "false")
+                db.set_setting("gemini_active_token_type", "primary")
+            else:
+                db.set_setting("gemini_backup_quota_exceeded", "false")
+                db.set_setting("gemini_active_token_type", "backup")
+            break
+
+        except Exception as err:
+            if is_quota_exceeded_error(err):
+                logger.warning(f"[Gemini Quota Exceeded] {token_type.upper()} token quota exceeded: {err}")
+                if token_type == "primary":
+                    db.set_setting("gemini_primary_quota_exceeded", "true")
+                    if backup_key:
+                        logger.info("Switching to BACKUP Gemini token for fallback...")
+                        db.set_setting("gemini_active_token_type", "backup")
+                    else:
+                        logger.warning("No backup token configured to fallback to.")
+                else:
+                    db.set_setting("gemini_backup_quota_exceeded", "true")
+                continue
+            else:
+                raise err
+
+    if response is None:
+        db.set_setting("gemini_primary_quota_exceeded", "true")
+        if backup_key:
+            db.set_setting("gemini_backup_quota_exceeded", "true")
+        logger.error("[Gemini Quota Exceeded] All available tokens (primary and backup) have exceeded their quota!")
+        raise AllTokensQuotaExceededError(
+            "La cuota de la API de Gemini se ha agotado en las cuentas configuradas (principal y respaldo). "
+            "La solicitud debe ser diferida o enviada a DLX."
         )
 
     result_text = response.text or ""
-    # Clean json formatting
     cleaned_text = re.sub(r"^\s*```(?:json)?\s*", "", result_text.strip(), flags=re.MULTILINE)
     cleaned_text = re.sub(r"\s*```\s*$", "", cleaned_text.strip(), flags=re.MULTILINE)
 
     try:
         res = json.loads(cleaned_text)
         res["modelUsed"] = active_model
+        res["tokenUsed"] = token_used_type
         return res
     except json.JSONDecodeError as err:
         logger.error(f"Failed to parse JSON from Gemini: {err}\nRaw text: {result_text}")
