@@ -79,7 +79,7 @@
         <div class="article-header">
           <div>
             <a href="/articles/{{ article.id }}" class="article-title-link">
-              {{ article.title }}
+              {{ article.title | clean_html }}
             </a>
             <div class="article-meta">
               {% if article.feed_name %}
@@ -108,7 +108,7 @@
 
         {% if article.content %}
           <p class="article-snippet">
-            {{ article.content[:280] }}{% if article.content|length > 280 %}...{% endif %}
+            {{ (article.content | clean_html)[:280] }}{% if (article.content | clean_html)|length > 280 %}...{% endif %}
           </p>
         {% endif %}
 

@@ -1073,7 +1073,7 @@
 								"trigger"
 							]
 						},
-						"description": "Dispara manualmente el proceso de 24 horas: calcula la ventana de tiempo (ahora vs 24h atrás), sincroniza el feed configurado, busca artículos sin analizar y despacha un mensaje a RabbitMQ por cada uno."
+						"description": "Dispara manualmente el proceso de 24 horas: calcula la ventana de tiempo (ahora vs 24h atrás), sincroniza todas las fuentes RSS configuradas en la tabla de feeds (o una específica si se envía feedId), busca artículos sin analizar en todas las fuentes y despacha un mensaje a RabbitMQ por cada uno."
 					},
 					"response": [],
 					"event": [

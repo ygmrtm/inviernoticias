@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ article.title }} - Detalle del Análisis{% endblock %}
+{% block title %}{{ article.title | clean_html }} - Detalle del Análisis{% endblock %}
 
 {% block content %}
 <div style="margin-bottom: 1.5rem;">
@@ -12,7 +12,7 @@
 <div class="card">
   <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
     <h1 style="font-size: 2rem; color: var(--text-main); line-height: 1.3;">
-      {{ article.title }}
+      {{ article.title | clean_html }}
     </h1>
 
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -38,8 +38,8 @@
     {% endif %}
   </p>
 
-  <div style="background-color: #0f172a; padding: 1.5rem; border-radius: var(--radius); margin: 1.5rem 0; font-size: 1.15rem;">
-    {{ article.content or 'Sin descripción proporcionada en el RSS.' }}
+  <div style="background-color: #0f172a; padding: 1.5rem; border-radius: var(--radius); margin: 1.5rem 0; font-size: 1.15rem; white-space: pre-line; line-height: 1.6;">
+    {{ (article.content | clean_html) or 'Sin descripción proporcionada en el RSS.' }}
   </div>
 
   {% if article.analysis_obj %}

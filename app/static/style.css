@@ -351,6 +351,8 @@ textarea {
   color: #cbd5e1;
   font-size: 1.1rem;
   margin-bottom: 1rem;
+  line-height: 1.5;
+  white-space: pre-line;
 }
 
 .article-actions {

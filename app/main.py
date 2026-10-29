@@ -83,6 +83,7 @@ app.add_middleware(
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+templates.env.filters["clean_html"] = db.clean_html_text
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -289,7 +290,9 @@ async def action_cron_trigger(feed_id: Optional[str] = Form(None)):
     fid = int(feed_id) if feed_id and feed_id.isdigit() else None
     try:
         summary = cron.run_24h_cron_sync_and_analyze(feed_id=fid, hours_back=24)
-        msg = f"CronJob 24h ejecutado: {summary.get('synced_count', 0)} importados, {summary.get('dispatched_count', 0)} enviados a RabbitMQ."
+        feeds_count = summary.get("feeds_count", 1)
+        feeds_txt = f"de {feeds_count} fuentes" if feeds_count > 1 else ""
+        msg = f"CronJob 24h ejecutado: {summary.get('synced_count', 0)} importados {feeds_txt}, {summary.get('dispatched_count', 0)} enviados a RabbitMQ."
         return RedirectResponse(url=f"/?msg={msg}", status_code=status.HTTP_303_SEE_OTHER)
     except Exception as e:
         logger.error(f"Error triggering 24h cronjob: {e}")
@@ -552,7 +555,9 @@ async def api_analyze_direct(payload: DirectAnalyzePayload):
         raise HTTPException(status_code=400, detail="News text is required.")
 
     try:
-        result = gemini.analyze_content(title=payload.title or "Texto directo", content=payload.text)
+        clean_title = db.clean_html_text(payload.title or "Texto directo")
+        clean_content = db.clean_html_text(payload.text)
+        result = gemini.analyze_content(title=clean_title, content=clean_content)
         return result
     except gemini.AllTokensQuotaExceededError as qe:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(qe))
