@@ -17,8 +17,10 @@ Detector de Sátira, Veracidad y Sesgo en Medios y Noticias de México, impulsad
 - **Sincronización Automatizada de RSS**: Agrega, gestiona y sincroniza múltiples fuentes de noticias.
 - **Análisis Directo de Texto**: Pega titulares o cadenas de mensajes para analizarlos al instante.
 - **Selección de Modelos de IA & Recomendaciones**: Permite seleccionar dinámicamente y persistir en base de datos el modelo de Gemini activo (`gemini-2.5-flash` recomendado, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`, etc.) con soporte para Search Grounding.
+- **Gestión de Token de Respaldo y Fallback Automático por Cuota (429)**: Si el token principal de **Google Gemini** agota su cuota de peticiones (`Error 429 / RESOURCE_EXHAUSTED`), el sistema conmuta automáticamente al token secundario de respaldo (`GEMINI_BACKUP_API_KEY`). Si ambos tokens agotan su cuota, la solicitud de análisis del artículo es enviada a la **cola DLX de RabbitMQ** para reprocesarse automáticamente más tarde.
+- **Consola SQL Ligera Integrada en Configuración**: Permite inspeccionar y consultar directamente la base de datos interna SQLite (`inviernoticias.db`) con soporte para sentencias `SELECT`, `PRAGMA`, `INSERT`, `UPDATE` y `DELETE`, con visualización de resultados en tablas accesibles y métricas de ejecución.
 - **Planificador Parametrizado (APScheduler)**: Configuración flexible de cuándo iniciar la primera ejecución (hora fija `HH:MM` o fecha ISO), intervalo en horas (`interval_hours`), hora diaria programada y ejecución inmediata opcional.
-- **CronJob Automatizado cada 24 Horas**: Proceso periódico que calcula la ventana de las últimas 24 horas (`start_date = now - 24h`, `end_date = now`), sincroniza la fuente configurada y encola artículos sin analizar.
+- **CronJob Automatizado cada 24 Horas**: Proceso periódico que calcula la ventana de las últimas 24 horas (`start_date = now - 24h`, `end_date = now`), sincroniza **todas las fuentes RSS registradas** en la tabla de feeds y encola artículos sin analizar para su procesamiento concurrente.
 - **Pipeline Asíncrono con RabbitMQ (Topic Exchange & DLX)**:
   - Enrutamiento por tipo de artículo hacia el exchange de tópicos `articles.exchange`.
   - Worker 1 (*Analyzer Consumer*): ejecuta inferencia con Gemini y despacha solicitud a Notion enrutada según tipo (`mockticia` vs `realticia`).
@@ -151,3 +153,7 @@ Se incluye la colección completa para probar todos los endpoints REST:
 | `/api/cron/trigger` | `POST` | Disparar manualmente el CronJob de 24 horas |
 | `/api/cron/status` | `GET` | Estado del planificador APScheduler |
 | `/api/queue/status` | `GET` | Monitoreo y conteo de mensajes en colas de RabbitMQ |
+| `/api/tokens/status` | `GET` | Estado y salud de cuota de tokens Gemini (principal y respaldo) |
+| `/api/tokens` | `POST` | Configurar o actualizar claves API de Gemini |
+| `/api/tokens/reset-quota` | `POST` | Restablecer estado de cuota y reactivar token principal |
+| `/api/sql/execute` | `POST` | Ejecutar comandos SQL directamente en SQLite interno |

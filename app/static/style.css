@@ -351,6 +351,8 @@ textarea {
   color: #cbd5e1;
   font-size: 1.1rem;
   margin-bottom: 1rem;
+  line-height: 1.5;
+  white-space: pre-line;
 }
 
 .article-actions {
@@ -485,4 +487,73 @@ footer {
   background-color: rgba(239, 68, 68, 0.2);
   color: #f87171;
   border: 1px solid var(--danger);
+}
+
+/* SQL Console & Query Results */
+.sql-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 1.05rem;
+  background-color: #030712;
+  color: #38bdf8;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1rem;
+  min-height: 120px;
+  width: 100%;
+  line-height: 1.5;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.chip {
+  display: inline-block;
+  background-color: #1e293b;
+  color: #94a3b8;
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.chip:hover {
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+}
+
+.table-scroll table {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.table-scroll th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #0f172a;
+}
+
+/* Token Management Cards */
+.token-card {
+  background-color: #0f172a;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
 }

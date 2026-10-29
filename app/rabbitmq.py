@@ -23,6 +23,7 @@ def get_connection():
     params = pika.URLParameters(RABBITMQ_URL)
     params.heartbeat = 60
     params.blocked_connection_timeout = 300
+    params.socket_timeout = 2.0
     return pika.BlockingConnection(params)
 
 def setup_rabbitmq(channel=None) -> bool:

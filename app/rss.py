@@ -73,7 +73,8 @@ def sync_feed_articles(
                     continue
 
             guid = getattr(entry, "id", None) or getattr(entry, "link", None) or f"{feed['id']}-{int(pub_date_cmp.timestamp())}-{count}"
-            title = getattr(entry, "title", "Sin Título")
+            raw_title = getattr(entry, "title", "Sin Título")
+            title = db.clean_html_text(raw_title)
             link = getattr(entry, "link", "")
             
             # Content / summary snippet
@@ -84,6 +85,7 @@ def sync_feed_articles(
                 content = entry.summary
             elif hasattr(entry, "description") and entry.description:
                 content = entry.description
+            content = db.clean_html_text(content)
 
             added = db.add_article(
                 feed_id=feed["id"],
