@@ -6,7 +6,8 @@
 <div class="card">
   <h1 class="card-title">⚙️ Configuración del Sistema & Modelos de Inteligencia Artificial</h1>
   <p style="color: var(--text-muted);">
-    Administra el modelo de lenguaje de Google Gemini activo para el análisis cultural y satírico, así como los parámetros de ejecución periódica del CronJob y RabbitMQ.
+    Administra el modelo de lenguaje de Google Gemini activo para el análisis cultural y satírico, así como los
+    parámetros de ejecución periódica del CronJob y RabbitMQ.
   </p>
 </div>
 
@@ -24,49 +25,46 @@
     <form action="/action/settings/model" method="post">
       <div style="margin-bottom: 1.5rem;">
         {% for m in models %}
-          <label class="model-option-card {% if m.is_current_default %}active-model{% endif %}" for="model-{{ m.id }}">
-            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem;">
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input 
-                  type="radio" 
-                  id="model-{{ m.id }}" 
-                  name="model" 
-                  value="{{ m.id }}" 
-                  {% if m.is_current_default %}checked{% endif %}
-                >
-                <strong style="font-size: 1.25rem; color: var(--text-main);">{{ m.name }}</strong>
-              </div>
-              <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                {% if m.recommended %}
-                  <span class="badge" style="background-color: rgba(251, 191, 36, 0.2); color: var(--gold); border: 1px solid var(--gold);">
-                    ⭐ Recomendado
-                  </span>
-                {% endif %}
-                {% if m.is_current_default %}
-                  <span class="badge badge-real">
-                    ✓ Activo
-                  </span>
-                {% endif %}
-              </div>
+        <label class="model-option-card {% if m.is_current_default %}active-model{% endif %}" for="model-{{ m.id }}">
+          <div
+            style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="radio" id="model-{{ m.id }}" name="model" value="{{ m.id }}" {% if m.is_current_default
+                %}checked{% endif %}>
+              <strong style="font-size: 1.25rem; color: var(--text-main);">{{ m.name }}</strong>
             </div>
-
-            <div style="margin-left: 2.2rem;">
-              <p style="font-size: 0.95rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.35rem;">
-                {{ m.tier }}
-              </p>
-              <p style="font-size: 1rem; color: #cbd5e1; margin-bottom: 0.5rem;">
-                {{ m.description }}
-              </p>
-              <p style="font-size: 0.9rem; color: var(--text-muted);">
-                <strong>Capacidades:</strong> {{ m.strengths }}
-              </p>
-              {% if m.supports_grounding %}
-                <span style="display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; color: #6ee7b7;">
-                  🌐 Búsqueda Web Google (Search Grounding) Integrada
-                </span>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              {% if m.recommended %}
+              <span class="badge"
+                style="background-color: rgba(251, 191, 36, 0.2); color: var(--gold); border: 1px solid var(--gold);">
+                ⭐ Recomendado
+              </span>
+              {% endif %}
+              {% if m.is_current_default %}
+              <span class="badge badge-real">
+                ✓ Activo
+              </span>
               {% endif %}
             </div>
-          </label>
+          </div>
+
+          <div style="margin-left: 2.2rem;">
+            <p style="font-size: 0.95rem; font-weight: 600; color: #38bdf8; margin-bottom: 0.35rem;">
+              {{ m.tier }}
+            </p>
+            <p style="font-size: 1rem; color: #cbd5e1; margin-bottom: 0.5rem;">
+              {{ m.description }}
+            </p>
+            <p style="font-size: 0.9rem; color: var(--text-muted);">
+              <strong>Capacidades:</strong> {{ m.strengths }}
+            </p>
+            {% if m.supports_grounding %}
+            <span style="display: inline-block; margin-top: 0.5rem; font-size: 0.85rem; color: #6ee7b7;">
+              🌐 Búsqueda Web Google (Search Grounding) Integrada
+            </span>
+            {% endif %}
+          </div>
+        </label>
         {% endfor %}
       </div>
 
@@ -80,16 +78,18 @@
   <div>
     <!-- Scheduler Status Box -->
     <div class="card">
-      <h2 style="font-size: 1.45rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+      <h2
+        style="font-size: 1.45rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
         <span>⏰ Estado del Planificador (APScheduler)</span>
         {% if scheduler_status.running and scheduler_status.has_active_job %}
-          <span class="status-pill status-pill-active">● En Ejecución</span>
+        <span class="status-pill status-pill-active">● En Ejecución</span>
         {% else %}
-          <span class="status-pill status-pill-stopped">○ Detenido</span>
+        <span class="status-pill status-pill-stopped">○ Detenido</span>
         {% endif %}
       </h2>
 
-      <div style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+      <div
+        style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
           <span style="color: var(--text-muted);">ID de Tarea:</span>
           <strong>{{ scheduler_status.job_id or 'Ninguna tarea activa' }}</strong>
@@ -105,10 +105,10 @@
           <strong>{{ scheduler_status.saved_config.interval_hours or '24' }} horas</strong>
         </div>
         {% if scheduler_status.saved_config.start_time %}
-          <div style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-muted);">Hora/Fecha Inicio:</span>
-            <strong>{{ scheduler_status.saved_config.start_time }}</strong>
-          </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: var(--text-muted);">Hora/Fecha Inicio:</span>
+          <strong>{{ scheduler_status.saved_config.start_time }}</strong>
+        </div>
         {% endif %}
       </div>
 
@@ -120,7 +120,8 @@
         </form>
 
         <form action="/action/cron/trigger" method="post" style="flex: 1;">
-          <button type="submit" class="btn btn-warning" style="width: 100%; background-color: var(--gold); color: #000;">
+          <button type="submit" class="btn btn-warning"
+            style="width: 100%; background-color: var(--gold); color: #000;">
             ⚡ Disparar Ingesta Ahora
           </button>
         </form>
@@ -139,28 +140,18 @@
       <form action="/action/settings/scheduler" method="post">
         <div class="form-group">
           <label for="start_time">Hora o Fecha de Inicio (Cuándo empezar):</label>
-          <input 
-            type="text" 
-            id="start_time" 
-            name="start_time" 
-            placeholder="Ej: 03:00  ó  2026-10-23T04:00:00"
-            value="{{ scheduler_status.saved_config.start_time or '' }}"
-          >
+          <input type="text" id="start_time" name="start_time" placeholder="Ej: 03:00  ó  2026-10-23T04:00:00"
+            value="{{ scheduler_status.saved_config.start_time or '' }}">
           <small style="color: var(--text-muted); display: block; margin-top: 0.35rem; font-size: 0.95rem;">
-            Acepta formato de hora <code>HH:MM</code> (ej. <code>02:00</code> para la próxima madrugada) o formato ISO completo.
+            Acepta formato de hora <code>HH:MM</code> (ej. <code>02:00</code> para la próxima madrugada) o formato ISO
+            completo.
           </small>
         </div>
 
         <div class="form-group">
           <label for="interval_hours">Intervalo de Recurrencia (Horas):</label>
-          <input 
-            type="number" 
-            id="interval_hours" 
-            name="interval_hours" 
-            min="1" 
-            max="168"
-            value="{{ scheduler_status.saved_config.interval_hours or 24 }}"
-          >
+          <input type="number" id="interval_hours" name="interval_hours" min="1" max="168"
+            value="{{ scheduler_status.saved_config.interval_hours or 24 }}">
           <small style="color: var(--text-muted); display: block; margin-top: 0.35rem; font-size: 0.95rem;">
             Por defecto: 24 horas (ciclo diario).
           </small>
@@ -169,38 +160,19 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div class="form-group">
             <label for="hour">Hora Diaria Fija (0-23):</label>
-            <input 
-              type="number" 
-              id="hour" 
-              name="hour" 
-              min="0" 
-              max="23" 
-              placeholder="Opcional (ej. 3)"
-              value="{{ scheduler_status.saved_config.hour or '' }}"
-            >
+            <input type="number" id="hour" name="hour" min="0" max="23" placeholder="Opcional (ej. 3)"
+              value="{{ scheduler_status.saved_config.hour or '' }}">
           </div>
           <div class="form-group">
             <label for="minute">Minuto (0-59):</label>
-            <input 
-              type="number" 
-              id="minute" 
-              name="minute" 
-              min="0" 
-              max="59" 
-              placeholder="Opcional (ej. 0)"
-              value="{{ scheduler_status.saved_config.minute or '' }}"
-            >
+            <input type="number" id="minute" name="minute" min="0" max="59" placeholder="Opcional (ej. 0)"
+              value="{{ scheduler_status.saved_config.minute or '' }}">
           </div>
         </div>
 
         <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
-          <input 
-            type="checkbox" 
-            id="start_immediately" 
-            name="start_immediately" 
-            value="true"
-            style="width: 22px; height: 22px; accent-color: var(--gold);"
-          >
+          <input type="checkbox" id="start_immediately" name="start_immediately" value="true"
+            style="width: 22px; height: 22px; accent-color: var(--gold);">
           <label for="start_immediately" style="margin-bottom: 0; cursor: pointer; font-size: 1.05rem;">
             Ejecutar un ciclo de sincronización inmediatamente al guardar
           </label>
@@ -215,106 +187,121 @@
 
 </div>
 
-<!-- Row 2: API Tokens & Quota Management (Primary & Backup Fallback) -->
+<!-- Row 2: API Keys List & Automatic Quota Rotation -->
 <div class="card" style="margin-top: 2rem;">
-  <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-    <span>🔑 Gestión de Tokens de API de Gemini (Principal & Respaldo)</span>
+  <h2
+    style="font-size: 1.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+    <span>🔑 Lista de Claves de API de Gemini (Rotación Automática por Cuota)</span>
     <form action="/action/settings/tokens/reset" method="post" style="display: inline;">
-      <button type="submit" class="btn btn-sm btn-secondary" title="Restablece las banderas de cuota y vuelve a probar el token principal">
+      <button type="submit" class="btn btn-sm btn-secondary"
+        title="Restablece las banderas de cuota agotada y vuelve a activar la primera clave de la lista">
         🔄 Reiniciar Estado de Cuotas
       </button>
     </form>
   </h2>
 
   <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.5rem;">
-    Configura tu token principal de Google Gemini y una cuenta alternativa de respaldo. Si la cuenta principal supera su cuota de uso (<strong>Error 429 / RESOURCE_EXHAUSTED</strong>), el sistema conmutará automáticamente al token de respaldo. Si ambas cuentas agotan su cuota, la tarea de análisis será enviada a la <strong>cola DLX de RabbitMQ</strong> para reintentar más tarde.
+    Configura tu lista de claves de API de Google Gemini. El sistema utiliza la clave activa para el análisis y, si se
+    agota su cuota (<strong>Error 429 / RESOURCE_EXHAUSTED</strong>), conmutará automáticamente a la siguiente clave de
+    la lista, luego a la siguiente y así sucesivamente. Si todas las claves agotan su cuota, la tarea se enviará a la
+    <strong>cola DLX de RabbitMQ</strong> para reintentar más tarde.
   </p>
 
   <!-- Tokens Diagnostics Status Grid -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
-    <!-- Primary Token Card -->
-    <div class="token-card" style="border-left: 5px solid {% if tokens_status.primary_quota_exceeded %}var(--danger){% elif tokens_status.primary_configured %}var(--success){% else %}var(--border-color){% endif %};">
+  {% if tokens_status.api_keys_list and tokens_status.api_keys_list|length > 0 %}
+  <div
+    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+    {% for k in tokens_status.api_keys_list %}
+    <div class="token-card"
+      style="border-left: 5px solid {% if k.quota_exceeded %}var(--danger){% elif k.is_active %}var(--gold){% else %}var(--success){% endif %};">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <strong style="font-size: 1.2rem; color: var(--text-main);">Token Principal</strong>
+        <strong style="font-size: 1.2rem; color: var(--text-main);">Clave #{{ k.key_number }}</strong>
         <div style="display: flex; gap: 0.4rem;">
-          {% if tokens_status.active_token_type == 'primary' and not tokens_status.primary_quota_exceeded %}
-            <span class="badge badge-real">⭐ Activo</span>
-          {% endif %}
-          {% if tokens_status.primary_quota_exceeded %}
-            <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
-              ⚠️ Cuota Agotada (429)
-            </span>
-          {% elif tokens_status.primary_configured %}
-            <span class="badge badge-real">✓ Disponible</span>
+          {% if k.is_active %}
+          <span class="badge"
+            style="background-color: rgba(251, 191, 36, 0.25); color: var(--gold); border: 1px solid var(--gold);">
+            ⭐ En Uso Activo
+          </span>
+          {% elif k.quota_exceeded %}
+          <span class="badge"
+            style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
+            ⚠️ Cuota Agotada (429)
+          </span>
           {% else %}
-            <span class="badge" style="background-color: #334155; color: #94a3b8;">No configurado</span>
+          <span class="badge badge-real">✓ Lista en Cola</span>
           {% endif %}
         </div>
       </div>
-      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-        Credencial: <code>{{ tokens_status.primary_masked or 'No establecida' }}</code>
+      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+        Credencial: <code>{{ k.masked }}</code>
       </p>
-      <small style="color: #64748b;">Variable de entorno: <code>GEMINI_API_KEY</code> o configuración en SQLite.</small>
+
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
+        {% if not k.is_active and not k.quota_exceeded %}
+        <form action="/action/settings/tokens/activate/{{ k.index }}" method="post" style="display: inline;">
+          <button type="submit" class="btn btn-sm btn-secondary" title="Establecer como clave activa actual">
+            ⚡ Activar
+          </button>
+        </form>
+        {% endif %}
+        <form action="/action/settings/tokens/delete/{{ k.index }}" method="post" style="display: inline;">
+          <button type="submit" class="btn btn-sm btn-danger" title="Eliminar clave de la lista">
+            🗑️ Eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="alert alert-error" style="margin-bottom: 1.5rem;">
+    ⚠️ No hay ninguna clave de API configurada actualmente. Agrega al menos una clave abajo para habilitar el análisis
+    con IA.
+  </div>
+  {% endif %}
+
+  <!-- Forms to Add or Manage Keys -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem;">
+    <!-- Form 1: Add Single Key -->
+    <div
+      style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color);">
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem; color: var(--text-main);">➕ Agregar Nueva Clave a la Lista
+      </h3>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem;">
+        Agrega una clave de Google Gemini adicional al final de la cola rotatoria.
+      </p>
+      <form action="/action/settings/tokens" method="post">
+        <div class="form-group">
+          <label for="new_key">Nueva Clave de API de Gemini:</label>
+          <input type="text" id="new_key" name="new_key" placeholder="AIzaSy..." required autocomplete="off">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          ➕ Agregar Clave a la Lista
+        </button>
+      </form>
     </div>
 
-    <!-- Backup Token Card -->
-    <div class="token-card" style="border-left: 5px solid {% if tokens_status.backup_quota_exceeded %}var(--danger){% elif tokens_status.backup_configured %}#38bdf8{% else %}var(--border-color){% endif %};">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <strong style="font-size: 1.2rem; color: var(--text-main);">Token de Respaldo (Fallback)</strong>
-        <div style="display: flex; gap: 0.4rem;">
-          {% if tokens_status.active_token_type == 'backup' and not tokens_status.backup_quota_exceeded %}
-            <span class="badge" style="background-color: rgba(56, 189, 248, 0.25); color: #38bdf8; border: 1px solid #38bdf8;">
-              🔄 Activo en Fallback
-            </span>
-          {% endif %}
-          {% if tokens_status.backup_quota_exceeded %}
-            <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
-              ⚠️ Cuota Agotada (429)
-            </span>
-          {% elif tokens_status.backup_configured %}
-            <span class="badge badge-real">✓ Listo</span>
-          {% else %}
-            <span class="badge" style="background-color: #334155; color: #94a3b8;">No configurado</span>
-          {% endif %}
-        </div>
-      </div>
-      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-        Credencial: <code>{{ tokens_status.backup_masked or 'No establecida' }}</code>
+    <!-- Form 2: Bulk Replace / Edit Full Keys List -->
+    <div
+      style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color);">
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem; color: var(--text-main);">📝 Modificar Lista Completa de
+        Claves</h3>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem;">
+        Pega múltiples claves (una por línea o separadas por comas) para reemplazar la lista completa.
       </p>
-      <small style="color: #64748b;">Variable de entorno: <code>GEMINI_BACKUP_API_KEY</code> o configuración en SQLite.</small>
+      <form action="/action/settings/tokens" method="post">
+        <div class="form-group">
+          <label for="api_keys">Lista de Claves (una por renglón):</label>
+          <textarea id="api_keys" name="api_keys" rows="4"
+            placeholder="AIzaSy...clave1&#10;AIzaSy...clave2&#10;AIzaSy...clave3"
+            style="min-height: 100px; font-family: ui-monospace, monospace; font-size: 0.95rem;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-success" style="width: 100%;">
+          💾 Guardar Lista Completa
+        </button>
+      </form>
     </div>
   </div>
-
-  <!-- Form to Update Tokens -->
-  <form action="/action/settings/tokens" method="post">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.25rem;">
-      <div class="form-group" style="margin-bottom: 0;">
-        <label for="primary_key">Clave de API Principal (GEMINI_API_KEY):</label>
-        <input 
-          type="text" 
-          id="primary_key" 
-          name="primary_key" 
-          placeholder="Dejar vacío para conservar actual"
-          autocomplete="off"
-        >
-      </div>
-
-      <div class="form-group" style="margin-bottom: 0;">
-        <label for="backup_key">Clave de API de Respaldo (GEMINI_BACKUP_API_KEY):</label>
-        <input 
-          type="text" 
-          id="backup_key" 
-          name="backup_key" 
-          placeholder="Ingresa token secundario de Gemini"
-          autocomplete="off"
-        >
-      </div>
-    </div>
-
-    <button type="submit" class="btn btn-primary" style="font-size: 1.15rem;">
-      💾 Guardar Credenciales de API
-    </button>
-  </form>
 </div>
 
 <!-- Row 3: Lightweight SQLite SQL Console -->
@@ -323,17 +310,20 @@
     💻 Consola SQL Interna (SQLite: <code>inviernoticias.db</code>)
   </h2>
   <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1rem;">
-    Ejecuta consultas de lectura (<code>SELECT</code>, <code>PRAGMA</code>) o comandos de modificación (<code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>) directamente sobre la base de datos interna.
+    Ejecuta consultas de lectura (<code>SELECT</code>, <code>PRAGMA</code>) o comandos de modificación
+    (<code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>) directamente sobre la base de datos interna.
   </p>
 
   <!-- Quick Query Chips -->
   <div style="margin-bottom: 0.5rem;">
-    <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
+    <span
+      style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 0.5rem;">
       Consultas de ejemplo rápido:
     </span>
     <div class="chip-list">
       <a href="/settings?sql=SELECT+*+FROM+feeds;" class="chip">SELECT * FROM feeds;</a>
-      <a href="/settings?sql=SELECT+id,+title,+link,+created_at+FROM+articles+LIMIT+5;" class="chip">SELECT articles (5);</a>
+      <a href="/settings?sql=SELECT+id,+title,+link,+created_at+FROM+articles+LIMIT+5;" class="chip">SELECT articles
+        (5);</a>
       <a href="/settings?sql=SELECT+key,+value,+updated_at+FROM+settings;" class="chip">SELECT * FROM settings;</a>
       <a href="/settings?sql=SELECT+COUNT(*)+AS+total_articulos+FROM+articles;" class="chip">COUNT(articles);</a>
       <a href="/settings?sql=PRAGMA+table_info(articles);" class="chip">PRAGMA table_info(articles);</a>
@@ -345,14 +335,9 @@
   <form action="/action/settings/sql" method="post">
     <div class="form-group">
       <label for="sql_query">Instrucción SQL a Ejecutar:</label>
-      <textarea 
-        id="sql_query" 
-        name="sql_query" 
-        class="sql-editor" 
-        rows="4" 
+      <textarea id="sql_query" name="sql_query" class="sql-editor" rows="4"
         placeholder="Escribe tu comando SQL aquí... Ej: SELECT * FROM articles WHERE is_satire = 1;"
-        required
-      >{{ last_sql or '' }}</textarea>
+        required>{{ last_sql or '' }}</textarea>
     </div>
 
     <button type="submit" class="btn btn-success" style="font-size: 1.15rem;">
@@ -362,50 +347,51 @@
 
   <!-- Query Results Section -->
   {% if sql_result %}
-    <div style="margin-top: 1.5rem;">
-      {% if sql_result.type == 'query' %}
-        <div class="alert alert-info" style="margin-bottom: 0.75rem;">
-          ✓ Consulta ejecutada exitosamente: <strong>{{ sql_result.rowCount }}</strong> fila(s) devuelta(s) en <strong>{{ sql_result.executionTimeMs }} ms</strong>.
-        </div>
-
-        {% if sql_result.rowCount > 0 %}
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  {% for col in sql_result.columns %}
-                    <th>{{ col }}</th>
-                  {% endfor %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in sql_result.rows %}
-                  <tr>
-                    {% for col in sql_result.columns %}
-                      <td style="max-width: 380px; overflow: hidden; text-overflow: ellipsis;">
-                        {{ row[col] if row[col] is not none else 'NULL' }}
-                      </td>
-                    {% endfor %}
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p style="color: var(--text-muted); padding: 1rem 0;">La consulta no devolvió filas.</p>
-        {% endif %}
-
-      {% elif sql_result.type == 'mutation' %}
-        <div class="alert alert-success">
-          ✓ {{ sql_result.message }} (Tiempo de ejecución: {{ sql_result.executionTimeMs }} ms).
-        </div>
-
-      {% elif sql_result.type == 'error' %}
-        <div class="alert alert-error">
-          ⚠️ {{ sql_result.error }} (Tiempo de respuesta: {{ sql_result.executionTimeMs }} ms).
-        </div>
-      {% endif %}
+  <div style="margin-top: 1.5rem;">
+    {% if sql_result.type == 'query' %}
+    <div class="alert alert-info" style="margin-bottom: 0.75rem;">
+      ✓ Consulta ejecutada exitosamente: <strong>{{ sql_result.rowCount }}</strong> fila(s) devuelta(s) en <strong>{{
+        sql_result.executionTimeMs }} ms</strong>.
     </div>
+
+    {% if sql_result.rowCount > 0 %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            {% for col in sql_result.columns %}
+            <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in sql_result.rows %}
+          <tr>
+            {% for col in sql_result.columns %}
+            <td style="max-width: 380px; overflow: hidden; text-overflow: ellipsis;">
+              {{ row[col] if row[col] is not none else 'NULL' }}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: var(--text-muted); padding: 1rem 0;">La consulta no devolvió filas.</p>
+    {% endif %}
+
+    {% elif sql_result.type == 'mutation' %}
+    <div class="alert alert-success">
+      ✓ {{ sql_result.message }} (Tiempo de ejecución: {{ sql_result.executionTimeMs }} ms).
+    </div>
+
+    {% elif sql_result.type == 'error' %}
+    <div class="alert alert-error">
+      ⚠️ {{ sql_result.error }} (Tiempo de respuesta: {{ sql_result.executionTimeMs }} ms).
+    </div>
+    {% endif %}
+  </div>
   {% endif %}
 </div>
 {% endblock %}
