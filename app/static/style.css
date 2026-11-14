@@ -235,6 +235,24 @@ textarea {
   font-size: 1rem;
 }
 
+/* Disabled & Grayed-out state for buttons */
+button:disabled,
+input[type="submit"]:disabled,
+.btn:disabled,
+.btn.disabled,
+.btn-disabled-grayout {
+  opacity: 0.55 !important;
+  filter: grayscale(100%) !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  background-color: #475569 !important;
+  color: #94a3b8 !important;
+  border-color: #475569 !important;
+  transform: none !important;
+  box-shadow: none !important;
+  transition: opacity 0.2s ease, filter 0.2s ease, background-color 0.2s ease;
+}
+
 /* Badges */
 .badge {
   display: inline-flex;

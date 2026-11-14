@@ -123,77 +123,317 @@ def get_available_models() -> List[Dict[str, Any]]:
     return result
 
 # ==========================================
-# TOKEN MANAGEMENT & QUOTA FALLBACK
+# TOKEN MANAGEMENT & QUOTA ROTATION (LIST OF KEYS)
 # ==========================================
-
-def get_primary_api_key() -> Optional[str]:
-    try:
-        configured = db.get_setting("gemini_api_key")
-        if configured:
-            return configured.strip()
-    except Exception:
-        pass
-    return (os.getenv("GEMINI_API_KEY") or "").strip() or None
-
-def get_backup_api_key() -> Optional[str]:
-    try:
-        configured = db.get_setting("gemini_backup_api_key")
-        if configured:
-            return configured.strip()
-    except Exception:
-        pass
-    return (
-        os.getenv("GEMINI_BACKUP_API_KEY") 
-        or os.getenv("GEMINI_API_KEY_BACKUP") 
-        or ""
-    ).strip() or None
-
-def set_tokens(primary_key: Optional[str] = None, backup_key: Optional[str] = None):
-    if primary_key is not None and primary_key.strip():
-        db.set_setting("gemini_api_key", primary_key.strip())
-        db.set_setting("gemini_primary_quota_exceeded", "false")
-        logger.info("Primary GEMINI_API_KEY updated in database settings.")
-    if backup_key is not None:
-        db.set_setting("gemini_backup_api_key", backup_key.strip())
-        db.set_setting("gemini_backup_quota_exceeded", "false")
-        logger.info("Backup GEMINI_BACKUP_API_KEY updated in database settings.")
-
-def reset_quota_status():
-    db.set_setting("gemini_primary_quota_exceeded", "false")
-    db.set_setting("gemini_backup_quota_exceeded", "false")
-    db.set_setting("gemini_active_token_type", "primary")
-    logger.info("Quota status reset: both tokens marked available, active set to primary.")
 
 def mask_key(key: Optional[str]) -> str:
     if not key:
         return ""
-    if len(key) <= 8:
+    k = key.strip()
+    if len(k) <= 8:
         return "****"
-    return f"{key[:6]}...{key[-4:]}"
+    return f"{k[:6]}...{k[-4:]}"
+
+def get_api_keys() -> List[str]:
+    """
+    Returns the ordered list of Gemini API keys:
+    1. From SQLite setting 'gemini_api_keys' (JSON array)
+    2. Fallback to env var GEMINI_API_KEYS (comma or newline separated, or JSON array)
+    3. Fallback to legacy env vars (GEMINI_API_KEY, GEMINI_BACKUP_API_KEY)
+    4. Fallback to legacy SQLite settings ('gemini_api_key', 'gemini_backup_api_key')
+    """
+    raw_keys: List[str] = []
+
+    # 1. Check SQLite JSON setting
+    try:
+        stored = db.get_setting("gemini_api_keys")
+        if stored:
+            parsed = json.loads(stored)
+            if isinstance(parsed, list):
+                raw_keys.extend([str(k).strip() for k in parsed if str(k).strip()])
+    except Exception as e:
+        logger.warning(f"Error reading gemini_api_keys from database: {e}")
+
+    # 2. Check GEMINI_API_KEYS environment variable if DB setting was empty
+    if not raw_keys:
+        env_keys = os.getenv("GEMINI_API_KEYS", "").strip()
+        if env_keys:
+            if env_keys.startswith("[") and env_keys.endswith("]"):
+                try:
+                    parsed_env = json.loads(env_keys)
+                    if isinstance(parsed_env, list):
+                        raw_keys.extend([str(k).strip() for k in parsed_env if str(k).strip()])
+                except Exception:
+                    pass
+            if not raw_keys:
+                parts = re.split(r'[\r\n,;]+', env_keys)
+                raw_keys.extend([p.strip() for p in parts if p.strip()])
+
+    # 3. Check legacy env vars
+    if not raw_keys:
+        primary_env = (os.getenv("GEMINI_API_KEY") or "").strip()
+        backup_env = (
+            os.getenv("GEMINI_BACKUP_API_KEY") 
+            or os.getenv("GEMINI_API_KEY_BACKUP") 
+            or ""
+        ).strip()
+        if primary_env:
+            raw_keys.append(primary_env)
+        if backup_env:
+            raw_keys.append(backup_env)
+
+    # 4. Check legacy SQLite settings
+    if not raw_keys:
+        try:
+            legacy_p = db.get_setting("gemini_api_key")
+            legacy_b = db.get_setting("gemini_backup_api_key")
+            if legacy_p and legacy_p.strip():
+                raw_keys.append(legacy_p.strip())
+            if legacy_b and legacy_b.strip():
+                raw_keys.append(legacy_b.strip())
+        except Exception:
+            pass
+
+    # Deduplicate while preserving ordering
+    seen = set()
+    cleaned_keys = []
+    for k in raw_keys:
+        if k and k not in seen:
+            seen.add(k)
+            cleaned_keys.append(k)
+
+    return cleaned_keys
+
+def set_api_keys(keys: List[str]):
+    """
+    Persists the ordered list of Gemini API keys in SQLite settings.
+    Also syncs legacy settings for backward compatibility.
+    """
+    seen = set()
+    cleaned = []
+    for k in keys:
+        clean = (k or "").strip()
+        if clean and clean not in seen:
+            seen.add(clean)
+            cleaned.append(clean)
+
+    db.set_setting("gemini_api_keys", json.dumps(cleaned))
+
+    # Sync legacy settings
+    if cleaned:
+        db.set_setting("gemini_api_key", cleaned[0])
+        if len(cleaned) > 1:
+            db.set_setting("gemini_backup_api_key", cleaned[1])
+        else:
+            db.set_setting("gemini_backup_api_key", "")
+    else:
+        db.set_setting("gemini_api_key", "")
+        db.set_setting("gemini_backup_api_key", "")
+
+    # Clean exhausted keys to only include keys that still exist
+    exhausted = get_exhausted_keys()
+    new_exhausted = [k for k in exhausted if k in cleaned]
+    db.set_setting("gemini_exhausted_keys", json.dumps(new_exhausted))
+
+    # Validate active key index
+    active_idx = get_active_key_index()
+    if active_idx >= len(cleaned) and cleaned:
+        set_active_key_index(0)
+
+    logger.info(f"Updated Gemini API keys list: {len(cleaned)} keys configured.")
+
+def add_api_key(key: str) -> bool:
+    """
+    Appends a new key to the list of API keys if not already present.
+    """
+    clean = (key or "").strip()
+    if not clean:
+        return False
+    keys = get_api_keys()
+    if clean in keys:
+        return False
+    keys.append(clean)
+    set_api_keys(keys)
+    return True
+
+def remove_api_key(index: int) -> bool:
+    """
+    Removes the API key at the specified 0-based index.
+    """
+    keys = get_api_keys()
+    if 0 <= index < len(keys):
+        keys.pop(index)
+        set_api_keys(keys)
+        return True
+    return False
+
+def get_exhausted_keys() -> List[str]:
+    """
+    Returns list of API key strings currently flagged as having exceeded quota (429).
+    """
+    try:
+        val = db.get_setting("gemini_exhausted_keys")
+        if val:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return [str(k) for k in parsed]
+    except Exception:
+        pass
+    return []
+
+def mark_key_exhausted(key: str):
+    """
+    Flags an API key as quota exhausted.
+    """
+    clean = (key or "").strip()
+    if not clean:
+        return
+    exhausted = get_exhausted_keys()
+    if clean not in exhausted:
+        exhausted.append(clean)
+        db.set_setting("gemini_exhausted_keys", json.dumps(exhausted))
+
+    # Legacy flags sync
+    keys = get_api_keys()
+    if keys and clean == keys[0]:
+        db.set_setting("gemini_primary_quota_exceeded", "true")
+    if len(keys) > 1 and clean == keys[1]:
+        db.set_setting("gemini_backup_quota_exceeded", "true")
+
+def mark_key_available(key: str):
+    """
+    Clears the quota exhausted flag for an API key.
+    """
+    clean = (key or "").strip()
+    if not clean:
+        return
+    exhausted = get_exhausted_keys()
+    if clean in exhausted:
+        exhausted = [k for k in exhausted if k != clean]
+        db.set_setting("gemini_exhausted_keys", json.dumps(exhausted))
+
+    # Legacy flags sync
+    keys = get_api_keys()
+    if keys and clean == keys[0]:
+        db.set_setting("gemini_primary_quota_exceeded", "false")
+    if len(keys) > 1 and clean == keys[1]:
+        db.set_setting("gemini_backup_quota_exceeded", "false")
+
+def get_active_key_index() -> int:
+    """
+    Returns the index of the currently active API key.
+    """
+    try:
+        val = db.get_setting("gemini_active_key_index", "0")
+        return int(val)
+    except Exception:
+        return 0
+
+def set_active_key_index(index: int):
+    """
+    Sets the active API key index.
+    """
+    db.set_setting("gemini_active_key_index", str(index))
+    # Sync legacy setting
+    if index == 0:
+        db.set_setting("gemini_active_token_type", "primary")
+    elif index == 1:
+        db.set_setting("gemini_active_token_type", "backup")
+    else:
+        db.set_setting("gemini_active_token_type", f"key_{index + 1}")
+
+def get_primary_api_key() -> Optional[str]:
+    keys = get_api_keys()
+    return keys[0] if keys else None
+
+def get_backup_api_key() -> Optional[str]:
+    keys = get_api_keys()
+    return keys[1] if len(keys) > 1 else None
+
+def set_tokens(primary_key: Optional[str] = None, backup_key: Optional[str] = None):
+    """
+    Backward-compatible method to set primary and backup tokens.
+    """
+    keys = get_api_keys()
+    pk = primary_key.strip() if primary_key and primary_key.strip() else None
+    bk = backup_key.strip() if backup_key and backup_key.strip() else None
+
+    if pk:
+        if keys:
+            keys[0] = pk
+        else:
+            keys.append(pk)
+    if bk:
+        if len(keys) > 1:
+            keys[1] = bk
+        elif len(keys) == 1:
+            keys.append(bk)
+        else:
+            keys.extend(["", bk])
+
+    set_api_keys([k for k in keys if k])
+
+def reset_quota_status():
+    """
+    Resets quota-exhausted status for all keys and points active index back to the first key.
+    """
+    db.set_setting("gemini_exhausted_keys", "[]")
+    set_active_key_index(0)
+    db.set_setting("gemini_primary_quota_exceeded", "false")
+    db.set_setting("gemini_backup_quota_exceeded", "false")
+    db.set_setting("gemini_active_token_type", "primary")
+    logger.info("Quota status reset: all API keys marked available, active key set to index 0.")
 
 def get_tokens_status() -> Dict[str, Any]:
-    primary = get_primary_api_key()
-    backup = get_backup_api_key()
-    
-    p_exceeded = db.get_setting("gemini_primary_quota_exceeded", "false") == "true"
-    b_exceeded = db.get_setting("gemini_backup_quota_exceeded", "false") == "true"
+    keys = get_api_keys()
+    exhausted = get_exhausted_keys()
+    active_idx = get_active_key_index()
+    if active_idx >= len(keys) and keys:
+        active_idx = 0
 
-    if p_exceeded and backup and not b_exceeded:
-        active = "backup"
-    elif not p_exceeded and primary:
-        active = "primary"
+    keys_status = []
+    for i, k in enumerate(keys):
+        is_exceeded = k in exhausted
+        is_active = (i == active_idx and not is_exceeded)
+        keys_status.append({
+            "index": i,
+            "key_number": i + 1,
+            "masked": mask_key(k),
+            "is_active": is_active,
+            "quota_exceeded": is_exceeded
+        })
+
+    primary = keys[0] if len(keys) > 0 else None
+    backup = keys[1] if len(keys) > 1 else None
+
+    primary_exceeded = (primary in exhausted) if primary else False
+    backup_exceeded = (backup in exhausted) if backup else False
+
+    all_exceeded = len(keys) > 0 and all(k in exhausted for k in keys)
+
+    if active_idx == 0:
+        active_type = "primary"
+    elif active_idx == 1:
+        active_type = "backup"
     else:
-        active = db.get_setting("gemini_active_token_type", "primary")
+        active_type = f"key_{active_idx + 1}"
 
     return {
+        "keys": keys_status,
+        "api_keys_list": keys_status,
+        "keys_list": keys_status,
+        "total_keys": len(keys),
+        "active_index": active_idx,
+        "active_key_masked": mask_key(keys[active_idx]) if keys and active_idx < len(keys) else "",
+        "all_quotas_exceeded": all_exceeded,
+        # Backward compatibility for Postman tests:
         "primary_configured": bool(primary),
         "primary_masked": mask_key(primary),
         "backup_configured": bool(backup),
         "backup_masked": mask_key(backup),
-        "active_token_type": active,
-        "primary_quota_exceeded": p_exceeded,
-        "backup_quota_exceeded": b_exceeded,
-        "all_quotas_exceeded": bool(p_exceeded and (b_exceeded or not backup))
+        "active_token_type": active_type,
+        "primary_quota_exceeded": primary_exceeded,
+        "backup_quota_exceeded": backup_exceeded,
     }
 
 def is_quota_exceeded_error(err: Exception) -> bool:
@@ -211,7 +451,21 @@ def is_quota_exceeded_error(err: Exception) -> bool:
     return False
 
 def get_genai_client(api_key: Optional[str] = None) -> genai.Client:
-    key = api_key or get_primary_api_key() or get_backup_api_key()
+    key = api_key
+    if not key:
+        keys = get_api_keys()
+        exhausted = get_exhausted_keys()
+        active_idx = get_active_key_index()
+        if keys:
+            if active_idx < len(keys) and keys[active_idx] not in exhausted:
+                key = keys[active_idx]
+            else:
+                for k in keys:
+                    if k not in exhausted:
+                        key = k
+                        break
+                if not key:
+                    key = keys[0]
     if not key:
         raise ValueError("GEMINI_API_KEY no está configurada en settings ni en variables de entorno.")
     return genai.Client(api_key=key)
@@ -261,33 +515,35 @@ Article Description/Content:
 "{content or ''}"
     """
 
-    primary_key = get_primary_api_key()
-    backup_key = get_backup_api_key()
+    keys = get_api_keys()
+    if not keys:
+        raise ValueError("No hay ninguna clave GEMINI_API_KEY configurada en settings ni en variables de entorno.")
 
-    if not primary_key and not backup_key:
-        raise ValueError("No hay ninguna clave GEMINI_API_KEY configurada.")
+    exhausted = get_exhausted_keys()
+    active_idx = get_active_key_index()
+    if active_idx >= len(keys):
+        active_idx = 0
 
-    primary_exceeded = db.get_setting("gemini_primary_quota_exceeded", "false") == "true"
-    backup_exceeded = db.get_setting("gemini_backup_quota_exceeded", "false") == "true"
+    # Determine order of keys to try starting from active_idx:
+    # First priority: keys that are not yet flagged as quota-exhausted
+    indices_to_try = [
+        (active_idx + i) % len(keys)
+        for i in range(len(keys))
+        if keys[(active_idx + i) % len(keys)] not in exhausted
+    ]
 
-    tokens_to_try = []
-    if primary_key and not primary_exceeded:
-        tokens_to_try.append(("primary", primary_key))
-    if backup_key and not backup_exceeded:
-        tokens_to_try.append(("backup", backup_key))
-    if not tokens_to_try:
-        # If both flagged exceeded, retry both in case quota has reset
-        if primary_key:
-            tokens_to_try.append(("primary", primary_key))
-        if backup_key:
-            tokens_to_try.append(("backup", backup_key))
+    # If all configured keys are marked exhausted, try all in rotation in case quotas refreshed
+    if not indices_to_try:
+        indices_to_try = [(active_idx + i) % len(keys) for i in range(len(keys))]
 
     response = None
-    token_used_type = None
+    token_used_index = None
 
-    for token_type, key in tokens_to_try:
+    for idx in indices_to_try:
+        key = keys[idx]
+        key_label = f"Key #{idx + 1} ({mask_key(key)})"
         try:
-            logger.info(f"Analyzing content using {token_type.upper()} Gemini token on model='{active_model}': '{title}'")
+            logger.info(f"Analyzing content using {key_label} on model='{active_model}': '{title}'")
             client = genai.Client(api_key=key)
 
             try:
@@ -307,38 +563,28 @@ Article Description/Content:
                     contents=prompt
                 )
 
-            token_used_type = token_type
-            if token_type == "primary":
-                db.set_setting("gemini_primary_quota_exceeded", "false")
-                db.set_setting("gemini_active_token_type", "primary")
-            else:
-                db.set_setting("gemini_backup_quota_exceeded", "false")
-                db.set_setting("gemini_active_token_type", "backup")
+            token_used_index = idx
+            mark_key_available(key)
+            set_active_key_index(idx)
             break
 
         except Exception as err:
             if is_quota_exceeded_error(err):
-                logger.warning(f"[Gemini Quota Exceeded] {token_type.upper()} token quota exceeded: {err}")
-                if token_type == "primary":
-                    db.set_setting("gemini_primary_quota_exceeded", "true")
-                    if backup_key:
-                        logger.info("Switching to BACKUP Gemini token for fallback...")
-                        db.set_setting("gemini_active_token_type", "backup")
-                    else:
-                        logger.warning("No backup token configured to fallback to.")
-                else:
-                    db.set_setting("gemini_backup_quota_exceeded", "true")
+                logger.warning(f"[Gemini Quota Exceeded] {key_label} quota exceeded: {err}")
+                mark_key_exhausted(key)
+                next_idx = (idx + 1) % len(keys)
+                set_active_key_index(next_idx)
+                logger.info(f"Switching to next API key in rotation: Key #{next_idx + 1} ({mask_key(keys[next_idx])})...")
                 continue
             else:
                 raise err
 
     if response is None:
-        db.set_setting("gemini_primary_quota_exceeded", "true")
-        if backup_key:
-            db.set_setting("gemini_backup_quota_exceeded", "true")
-        logger.error("[Gemini Quota Exceeded] All available tokens (primary and backup) have exceeded their quota!")
+        for k in keys:
+            mark_key_exhausted(k)
+        logger.error(f"[Gemini Quota Exceeded] All {len(keys)} configured API keys have exceeded their quota!")
         raise AllTokensQuotaExceededError(
-            "La cuota de la API de Gemini se ha agotado en las cuentas configuradas (principal y respaldo). "
+            f"La cuota de la API de Gemini se ha agotado en todas las claves configuradas ({len(keys)} claves). "
             "La solicitud debe ser diferida o enviada a DLX."
         )
 
@@ -349,7 +595,8 @@ Article Description/Content:
     try:
         res = json.loads(cleaned_text)
         res["modelUsed"] = active_model
-        res["tokenUsed"] = token_used_type
+        res["tokenUsed"] = f"key_{token_used_index + 1}"
+        res["tokenIndex"] = token_used_index
         return res
     except json.JSONDecodeError as err:
         logger.error(f"Failed to parse JSON from Gemini: {err}\nRaw text: {result_text}")

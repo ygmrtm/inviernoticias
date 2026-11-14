@@ -215,106 +215,118 @@
 
 </div>
 
-<!-- Row 2: API Tokens & Quota Management (Primary & Backup Fallback) -->
+<!-- Row 2: API Keys List & Automatic Quota Rotation -->
 <div class="card" style="margin-top: 2rem;">
   <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-    <span>🔑 Gestión de Tokens de API de Gemini (Principal & Respaldo)</span>
+    <span>🔑 Lista de Claves de API de Gemini (Rotación Automática por Cuota)</span>
     <form action="/action/settings/tokens/reset" method="post" style="display: inline;">
-      <button type="submit" class="btn btn-sm btn-secondary" title="Restablece las banderas de cuota y vuelve a probar el token principal">
+      <button type="submit" class="btn btn-sm btn-secondary" title="Restablece las banderas de cuota agotada y vuelve a activar la primera clave de la lista">
         🔄 Reiniciar Estado de Cuotas
       </button>
     </form>
   </h2>
 
   <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 1.5rem;">
-    Configura tu token principal de Google Gemini y una cuenta alternativa de respaldo. Si la cuenta principal supera su cuota de uso (<strong>Error 429 / RESOURCE_EXHAUSTED</strong>), el sistema conmutará automáticamente al token de respaldo. Si ambas cuentas agotan su cuota, la tarea de análisis será enviada a la <strong>cola DLX de RabbitMQ</strong> para reintentar más tarde.
+    Configura tu lista de claves de API de Google Gemini. El sistema utiliza la clave activa para el análisis y, si se agota su cuota (<strong>Error 429 / RESOURCE_EXHAUSTED</strong>), conmutará automáticamente a la siguiente clave de la lista, luego a la siguiente y así sucesivamente. Si todas las claves agotan su cuota, la tarea se enviará a la <strong>cola DLX de RabbitMQ</strong> para reintentar más tarde.
   </p>
 
   <!-- Tokens Diagnostics Status Grid -->
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
-    <!-- Primary Token Card -->
-    <div class="token-card" style="border-left: 5px solid {% if tokens_status.primary_quota_exceeded %}var(--danger){% elif tokens_status.primary_configured %}var(--success){% else %}var(--border-color){% endif %};">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <strong style="font-size: 1.2rem; color: var(--text-main);">Token Principal</strong>
-        <div style="display: flex; gap: 0.4rem;">
-          {% if tokens_status.active_token_type == 'primary' and not tokens_status.primary_quota_exceeded %}
-            <span class="badge badge-real">⭐ Activo</span>
-          {% endif %}
-          {% if tokens_status.primary_quota_exceeded %}
-            <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
-              ⚠️ Cuota Agotada (429)
-            </span>
-          {% elif tokens_status.primary_configured %}
-            <span class="badge badge-real">✓ Disponible</span>
-          {% else %}
-            <span class="badge" style="background-color: #334155; color: #94a3b8;">No configurado</span>
-          {% endif %}
+  {% if tokens_status.api_keys_list and tokens_status.api_keys_list|length > 0 %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 2rem;">
+      {% for k in tokens_status.api_keys_list %}
+        <div class="token-card" style="border-left: 5px solid {% if k.quota_exceeded %}var(--danger){% elif k.is_active %}var(--gold){% else %}var(--success){% endif %};">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <strong style="font-size: 1.2rem; color: var(--text-main);">Clave #{{ k.key_number }}</strong>
+            <div style="display: flex; gap: 0.4rem;">
+              {% if k.is_active %}
+                <span class="badge" style="background-color: rgba(251, 191, 36, 0.25); color: var(--gold); border: 1px solid var(--gold);">
+                  ⭐ En Uso Activo
+                </span>
+              {% elif k.quota_exceeded %}
+                <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
+                  ⚠️ Cuota Agotada (429)
+                </span>
+              {% else %}
+                <span class="badge badge-real">✓ Lista en Cola</span>
+              {% endif %}
+            </div>
+          </div>
+          <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+            Credencial: <code>{{ k.masked }}</code>
+          </p>
+
+          <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
+            {% if not k.is_active and not k.quota_exceeded %}
+              <form action="/action/settings/tokens/activate/{{ k.index }}" method="post" style="display: inline;">
+                <button type="submit" class="btn btn-sm btn-secondary" title="Establecer como clave activa actual">
+                  ⚡ Activar
+                </button>
+              </form>
+            {% endif %}
+            <form action="/action/settings/tokens/delete/{{ k.index }}" method="post" style="display: inline;">
+              <button type="submit" class="btn btn-sm btn-danger" title="Eliminar clave de la lista">
+                🗑️ Eliminar
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
-      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-        Credencial: <code>{{ tokens_status.primary_masked or 'No establecida' }}</code>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="alert alert-error" style="margin-bottom: 1.5rem;">
+      ⚠️ No hay ninguna clave de API configurada actualmente. Agrega al menos una clave abajo para habilitar el análisis con IA.
+    </div>
+  {% endif %}
+
+  <!-- Forms to Add or Manage Keys -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.5rem;">
+    <!-- Form 1: Add Single Key -->
+    <div style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color);">
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem; color: var(--text-main);">➕ Agregar Nueva Clave a la Lista</h3>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem;">
+        Agrega una clave de Google Gemini adicional al final de la cola rotatoria.
       </p>
-      <small style="color: #64748b;">Variable de entorno: <code>GEMINI_API_KEY</code> o configuración en SQLite.</small>
+      <form action="/action/settings/tokens" method="post">
+        <div class="form-group">
+          <label for="new_key">Nueva Clave de API de Gemini:</label>
+          <input 
+            type="text" 
+            id="new_key" 
+            name="new_key" 
+            placeholder="AIzaSy..." 
+            required 
+            autocomplete="off"
+          >
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          ➕ Agregar Clave a la Lista
+        </button>
+      </form>
     </div>
 
-    <!-- Backup Token Card -->
-    <div class="token-card" style="border-left: 5px solid {% if tokens_status.backup_quota_exceeded %}var(--danger){% elif tokens_status.backup_configured %}#38bdf8{% else %}var(--border-color){% endif %};">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <strong style="font-size: 1.2rem; color: var(--text-main);">Token de Respaldo (Fallback)</strong>
-        <div style="display: flex; gap: 0.4rem;">
-          {% if tokens_status.active_token_type == 'backup' and not tokens_status.backup_quota_exceeded %}
-            <span class="badge" style="background-color: rgba(56, 189, 248, 0.25); color: #38bdf8; border: 1px solid #38bdf8;">
-              🔄 Activo en Fallback
-            </span>
-          {% endif %}
-          {% if tokens_status.backup_quota_exceeded %}
-            <span class="badge" style="background-color: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid var(--danger);">
-              ⚠️ Cuota Agotada (429)
-            </span>
-          {% elif tokens_status.backup_configured %}
-            <span class="badge badge-real">✓ Listo</span>
-          {% else %}
-            <span class="badge" style="background-color: #334155; color: #94a3b8;">No configurado</span>
-          {% endif %}
-        </div>
-      </div>
-      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.25rem;">
-        Credencial: <code>{{ tokens_status.backup_masked or 'No establecida' }}</code>
+    <!-- Form 2: Bulk Replace / Edit Full Keys List -->
+    <div style="background-color: #0f172a; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border-color);">
+      <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem; color: var(--text-main);">📝 Modificar Lista Completa de Claves</h3>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem;">
+        Pega múltiples claves (una por línea o separadas por comas) para reemplazar la lista completa.
       </p>
-      <small style="color: #64748b;">Variable de entorno: <code>GEMINI_BACKUP_API_KEY</code> o configuración en SQLite.</small>
+      <form action="/action/settings/tokens" method="post">
+        <div class="form-group">
+          <label for="api_keys">Lista de Claves (una por renglón):</label>
+          <textarea 
+            id="api_keys" 
+            name="api_keys" 
+            rows="4" 
+            placeholder="AIzaSy...clave1&#10;AIzaSy...clave2&#10;AIzaSy...clave3"
+            style="min-height: 100px; font-family: ui-monospace, monospace; font-size: 0.95rem;"
+          ></textarea>
+        </div>
+        <button type="submit" class="btn btn-success" style="width: 100%;">
+          💾 Guardar Lista Completa
+        </button>
+      </form>
     </div>
   </div>
-
-  <!-- Form to Update Tokens -->
-  <form action="/action/settings/tokens" method="post">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.25rem;">
-      <div class="form-group" style="margin-bottom: 0;">
-        <label for="primary_key">Clave de API Principal (GEMINI_API_KEY):</label>
-        <input 
-          type="text" 
-          id="primary_key" 
-          name="primary_key" 
-          placeholder="Dejar vacío para conservar actual"
-          autocomplete="off"
-        >
-      </div>
-
-      <div class="form-group" style="margin-bottom: 0;">
-        <label for="backup_key">Clave de API de Respaldo (GEMINI_BACKUP_API_KEY):</label>
-        <input 
-          type="text" 
-          id="backup_key" 
-          name="backup_key" 
-          placeholder="Ingresa token secundario de Gemini"
-          autocomplete="off"
-        >
-      </div>
-    </div>
-
-    <button type="submit" class="btn btn-primary" style="font-size: 1.15rem;">
-      💾 Guardar Credenciales de API
-    </button>
-  </form>
 </div>
 
 <!-- Row 3: Lightweight SQLite SQL Console -->

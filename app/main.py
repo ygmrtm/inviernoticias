@@ -62,8 +62,8 @@ async def lifespan(app: FastAPI):
     worker.worker_service.stop_all()
     scheduler.stop_scheduler()
 
-APP_VERSION = os.getenv("APP_VERSION", "2.1.0")
-APP_RELEASE = os.getenv("APP_RELEASE", "2026.10.29")
+APP_VERSION = os.getenv("APP_VERSION", "2.2.0")
+APP_RELEASE = os.getenv("APP_RELEASE", "2026.11.14")
 
 app = FastAPI(
     title="Inviernoticias API",
@@ -127,6 +127,8 @@ class SqlExecutePayload(BaseModel):
     query: str
 
 class TokenUpdatePayload(BaseModel):
+    apiKeys: Optional[List[str]] = None
+    apiKey: Optional[str] = None
     primaryKey: Optional[str] = None
     backupKey: Optional[str] = None
 
@@ -438,22 +440,68 @@ async def action_settings_sql(
 
 @app.post("/action/settings/tokens")
 async def action_settings_tokens(
+    api_keys: Optional[str] = Form(None),
+    new_key: Optional[str] = Form(None),
     primary_key: Optional[str] = Form(None),
     backup_key: Optional[str] = Form(None)
 ):
     try:
-        gemini.set_tokens(
-            primary_key=primary_key.strip() if primary_key and primary_key.strip() else None,
-            backup_key=backup_key.strip() if backup_key and backup_key.strip() else None
-        )
+        import re
+        if new_key and new_key.strip():
+            gemini.add_api_key(new_key.strip())
+            msg = "Nueva+clave+de+API+agregada+exitosamente+a+la+lista."
+        elif api_keys is not None:
+            parsed_keys = [k.strip() for k in re.split(r'[\r\n,]+', api_keys) if k.strip()]
+            gemini.set_api_keys(parsed_keys)
+            msg = f"Lista+de+{len(parsed_keys)}+claves+de+API+actualizada+con+éxito."
+        else:
+            gemini.set_tokens(
+                primary_key=primary_key.strip() if primary_key and primary_key.strip() else None,
+                backup_key=backup_key.strip() if backup_key and backup_key.strip() else None
+            )
+            msg = "Tokens+de+Gemini+actualizados+exitosamente."
         return RedirectResponse(
-            url="/settings?msg=Tokens+de+Gemini+actualizados+exitosamente",
+            url=f"/settings?msg={msg}",
             status_code=status.HTTP_303_SEE_OTHER
         )
     except Exception as e:
         logger.error(f"Error saving tokens: {e}")
         return RedirectResponse(
             url=f"/settings?err=Error+al+guardar+tokens:+{e}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+@app.post("/action/settings/tokens/delete/{index}")
+async def action_settings_tokens_delete(index: int):
+    try:
+        success = gemini.remove_api_key(index)
+        if success:
+            msg = f"Clave+número+{index + 1}+eliminada+con+éxito."
+        else:
+            msg = "No+se+encontró+la+clave+a+eliminar."
+        return RedirectResponse(
+            url=f"/settings?msg={msg}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+    except Exception as e:
+        logger.error(f"Error deleting token at index {index}: {e}")
+        return RedirectResponse(
+            url=f"/settings?err=Error+al+eliminar+clave:+{e}",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+@app.post("/action/settings/tokens/activate/{index}")
+async def action_settings_tokens_activate(index: int):
+    try:
+        gemini.set_active_key_index(index)
+        return RedirectResponse(
+            url=f"/settings?msg=Clave+número+{index + 1}+activada+como+actual.",
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+    except Exception as e:
+        logger.error(f"Error activating token at index {index}: {e}")
+        return RedirectResponse(
+            url=f"/settings?err=Error+al+activar+clave:+{e}",
             status_code=status.HTTP_303_SEE_OTHER
         )
 
@@ -725,16 +773,40 @@ async def api_tokens_status():
 @app.post("/api/tokens")
 async def api_set_tokens(payload: TokenUpdatePayload):
     """
-    Configures and persists the primary and/or backup Gemini API tokens.
+    Configures and persists Gemini API tokens.
+    Supports a list of apiKeys, a single apiKey, or legacy primaryKey/backupKey.
     """
     try:
-        gemini.set_tokens(primary_key=payload.primaryKey, backup_key=payload.backupKey)
+        if payload.apiKeys is not None:
+            gemini.set_api_keys(payload.apiKeys)
+        elif payload.apiKey is not None:
+            gemini.add_api_key(payload.apiKey)
+        else:
+            gemini.set_tokens(primary_key=payload.primaryKey, backup_key=payload.backupKey)
         return {
             "message": "Tokens de Gemini actualizados exitosamente.",
             "status": gemini.get_tokens_status()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al actualizar tokens de Gemini: {e}")
+
+@app.delete("/api/tokens/{index}")
+async def api_delete_token(index: int):
+    """
+    Deletes the Gemini API key at the specified 0-based index.
+    """
+    try:
+        success = gemini.remove_api_key(index)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Clave en el índice {index} no encontrada.")
+        return {
+            "message": f"Clave #{index + 1} eliminada exitosamente.",
+            "status": gemini.get_tokens_status()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar clave de API: {e}")
 
 @app.post("/api/tokens/reset-quota")
 async def api_reset_tokens_quota():
